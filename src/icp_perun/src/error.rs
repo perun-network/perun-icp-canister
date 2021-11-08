@@ -12,12 +12,11 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-pub enum Error {
-	InvalidSignatures,
-	MalformedInput,
-	DuplicateWithdraw,
-	NotAuthorized,
-	StateNotFinal,
+#[macro_export]
+macro_rules! ensure {
+	($cond:expr) => {
+		if !($cond) {
+			panic!("Error");
+		}
+	};
 }
-
-pub type Result<T> = std::result::Result<T, Error>;
