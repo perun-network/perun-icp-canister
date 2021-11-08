@@ -17,7 +17,7 @@ name = "icp_perun"
 [dependencies]
 ic-cdk = "0.3"
 ic-cdk-macros = "0.3"
-primitive-types = "0.10.1"
-ecdsa = {version = "0.12.4", features = ["verify"]}
-k256 = "0.9.6"
 digest = "0.9.0"
+candid = "0.7.8"
+serde = "1.0.130"
+num-bigint = "0.4.3"
