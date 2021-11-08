@@ -17,7 +17,10 @@ name = "icp_perun"
 [dependencies]
 ic-cdk = "0.3"
 ic-cdk-macros = "0.3"
-digest = "0.9.0"
 candid = "0.7.8"
+ed25519 = "1.2.0"
+ed25519-dalek = "1.0.1"
+digest = "0.9.0"
+
 serde = "1.0.130"
 num-bigint = "0.4.3"
