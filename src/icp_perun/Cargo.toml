@@ -1,0 +1,23 @@
+[package]
+name = "icp-perun"
+version = "0.1.0"
+authors = ["PolyCrypt GmbH <info@polycry.pt>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://polycry.pt/"
+keywords = ["blockchain", "channel", "perun"]
+description = "Dfinity Canister for Perun State Channels"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib"]
+name = "icp_perun"
+
+[dependencies]
+ic-cdk = "0.3"
+ic-cdk-macros = "0.3"
+primitive-types = "0.10.1"
+ecdsa = {version = "0.12.4", features = ["verify"]}
+k256 = "0.9.6"
+digest = "0.9.0"

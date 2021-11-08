@@ -1,0 +1,8 @@
+type Error = uint8;
+type ChannelId = blob;
+type L2Account = blob;
+type Funding = record { channel: ChannelId; participant: L2Account; };
+
+service : {
+	"deposit": (Funding) -> (opt Error);
+}
