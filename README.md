@@ -12,6 +12,13 @@ To learn more before you start working with icp_perun, see the following documen
 - [Motoko Language Quick Reference](https://sdk.dfinity.org/docs/language-guide/language-manual.html)
 - [JavaScript API Reference](https://erxue-5aaaa-aaaab-qaagq-cai.raw.ic0.app)
 
+# Test & Compile
+
+```sh
+cargo test
+./build.sh
+```
+
 If you want to start working on your project right away, you might want to try the following commands:
 
 ```bash
