@@ -14,11 +14,10 @@
 
 use crate::*;
 
-//use std::hash::Hash;
-use candid::{CandidType, Decode, Deserialize, Encode};
 use core::cmp::*;
 //use ecdsa::hazmat::DigestPrimitive;
-pub use ic_cdk::export::candid::{Int, Nat};
+use candid::{Decode, Encode};
+pub use ic_cdk::export::candid::{CandidType, Deserialize, Int, Nat};
 
 use digest::Output;
 //pub use ecdsa::signature::DigestVerifier;
@@ -26,15 +25,15 @@ use digest::Output;
 //use ecdsa::{EncodedPoint, VerifyingKey};
 //use k256::Secp256k1 as Curve;
 
-/// A layer-2 signature.
-pub type L2Signature = Vec<u8>;
 /// A hasher.
 //pub type Hasher = <Curve as DigestPrimitive>::Digest;
 /// A hash as used by the signature scheme.
 pub type Hash = Vec<u8>;
 #[derive(PartialEq, Default, Clone, Eq, CandidType, Deserialize)]
 /// A layer-2 account identifier.
-pub struct L2Account(pub String /*EncodedPoint as string*/);
+pub struct L2Account(pub Vec<u8>);
+#[derive(PartialEq, Default, Clone, Eq, CandidType, Deserialize)]
+pub struct L2Signature(pub Vec<u8>);
 /// A payable layer-1 account identifier.
 pub use ic_cdk::export::candid::Principal as L1Account;
 /// An amount of a currency.
@@ -52,7 +51,7 @@ pub type Version = u64;
 
 #[derive(Deserialize, CandidType)]
 pub struct Params {
-	pub none: Nonce,
+	pub nonce: Nonce,
 	pub participants: Vec<L2Account>,
 	pub challenge_duration: Duration,
 }
@@ -91,9 +90,19 @@ pub struct Funding {
 
 impl std::hash::Hash for L2Account {
 	fn hash<H: std::hash::Hasher>(self: &Self, state: &mut H) {
-		self.0.as_bytes().hash(state);
+		self.0.hash(state);
 	}
 }
+
+impl State {
+	pub fn validate_sig(&self, sig: &L2Signature, pk: &L2Account) {
+		let enc = Encode!(self).expect("encoding state");
+		let pk = PublicKey::from_bytes(&pk.0).expect("invalid pk");
+		let sig = ed25519::signature::Signature::from_bytes(&sig.0).expect("invalid sig");
+		pk.verify(&enc, &sig).expect("wrong sig")
+	}
+}
+
 /*
 impl L2Account {
 	pub fn verify_digest(
