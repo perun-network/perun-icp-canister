@@ -68,13 +68,7 @@ fn withdraw(_request: WithdrawalRequest, _auth: L2Signature) -> () {}
 /// this function should be used to check whether all participants have
 /// deposited their owed funds into a channel to ensure it is fully funded.
 fn query_deposit(funding: Funding) -> Option<Amount> {
-	STATE.with(|s| {
-		let deposits = s.deposits.borrow();
-		match deposits.get(&funding) {
-			None => None,
-			Some(a) => Some(a.clone()),
-		}
-	})
+	STATE.with(|s| s.query_deposit(funding))
 }
 
 impl CanisterState {
@@ -84,6 +78,12 @@ impl CanisterState {
 			.entry(funding)
 			.or_insert(Default::default()) += amount;
 		Ok(())
+	}
+	pub fn query_deposit(&self, funding: Funding) -> Option<Amount> {
+		match self.deposits.borrow().get(&funding) {
+			None => None,
+			Some(a) => Some(a.clone()),
+		}
 	}
 
 	pub fn dispute(&self, params: Params, state: FullySignedState) -> Result<()> {
