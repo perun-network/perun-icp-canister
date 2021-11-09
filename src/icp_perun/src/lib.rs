@@ -13,17 +13,17 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
+use std::cell::RefCell;
 pub mod error;
 pub mod types;
 
-use std::cell::RefCell;
 use types::*;
 use error::*;
 use ed25519_dalek::{SecretKey, PublicKey, ExpandedSecretKey};
 use candid::Encode;
 
 thread_local! {
-	static STATE: CanisterState = Default::default();
+	static STATE: RefCell<CanisterState> = Default::default();
 }
 
 #[derive(Default)]
@@ -32,9 +32,9 @@ thread_local! {
 struct CanisterState {
 	/// Tracks all deposits for unregistered channels. For registered channels,
 	/// tracks withdrawable balances instead.
-	deposits: RefCell<HashMap<Funding, Amount>>,
+	deposits: HashMap<Funding, Amount>,
 	/// Tracks all registered channels.
-	_channels: RefCell<HashMap<ChannelId, RegisteredState>>,
+	_channels: HashMap<ChannelId, RegisteredState>,
 }
 
 #[ic_cdk_macros::update]
@@ -42,7 +42,7 @@ struct CanisterState {
 /// Please do NOT over-fund or fund channels that are already fully funded, as
 /// this can lead to a permanent LOSS OF FUNDS.
 fn deposit(funding: Funding, amount: Amount) -> Option<Error> {
-	STATE.with(|s| s.deposit(funding, amount)).err()
+	STATE.with(|s| s.borrow_mut().deposit(funding, amount)).err()
 }
 
 #[ic_cdk_macros::update]
@@ -51,7 +51,7 @@ fn deposit(funding: Funding, amount: Amount) -> Option<Error> {
 /// duration to register a more recent channel state if exists. After the
 /// challenge duration elapsed, the channel will be marked as settled.
 fn dispute(params: Params, state: FullySignedState) -> Option<Error> {
-	STATE.with(|s| s.dispute(params, state)).err()
+	STATE.with(|s| s.borrow_mut().dispute(params, state)).err()
 }
 
 #[ic_cdk_macros::update]
@@ -68,19 +68,18 @@ fn withdraw(_request: WithdrawalRequest, _auth: L2Signature) -> () {}
 /// this function should be used to check whether all participants have
 /// deposited their owed funds into a channel to ensure it is fully funded.
 fn query_deposit(funding: Funding) -> Option<Amount> {
-	STATE.with(|s| s.query_deposit(funding))
+	STATE.with(|s| s.borrow().query_deposit(funding))
 }
 
 impl CanisterState {
-	pub fn deposit(&self, funding: Funding, amount: Amount) -> Result<()> {
+	pub fn deposit(&mut self, funding: Funding, amount: Amount) -> Result<()> {
 		*self.deposits
-			.borrow_mut()
 			.entry(funding)
 			.or_insert(Default::default()) += amount;
 		Ok(())
 	}
 	pub fn query_deposit(&self, funding: Funding) -> Option<Amount> {
-		match self.deposits.borrow().get(&funding) {
+		match self.deposits.get(&funding) {
 			None => None,
 			Some(a) => Some(a.clone()),
 		}
@@ -97,7 +96,7 @@ impl CanisterState {
 
 #[test]
 fn test_deposit() {
-	let canister = CanisterState::default();
+	let mut canister = CanisterState::default();
 	let funding = Funding::default();
 	// Deposit 10.
 	assert_eq!(canister.deposit(funding.clone(), 10.into()), Ok(()));
