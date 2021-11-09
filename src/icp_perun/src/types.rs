@@ -14,27 +14,26 @@
 
 use crate::*;
 
-//use std::hash::Hash;
 use core::cmp::*;
-use ecdsa::hazmat::DigestPrimitive;
+//use ecdsa::hazmat::DigestPrimitive;
+use candid::{Decode, Encode};
 pub use ic_cdk::export::candid::{CandidType, Deserialize, Int, Nat};
 
-use k256::Secp256k1 as Curve;
-use ecdsa::VerifyingKey;
-pub use ecdsa::signature::DigestVerifier;
 use digest::Output;
+//pub use ecdsa::signature::DigestVerifier;
+//use ecdsa::signature::Signature;
+//use ecdsa::{EncodedPoint, VerifyingKey};
+//use k256::Secp256k1 as Curve;
 
-use ecdsa::Signature;
-
-/// A layer-2 signature.
-pub type L2Signature = Signature<Curve>;
 /// A hasher.
-pub type Hasher = <Curve as DigestPrimitive>::Digest;
+//pub type Hasher = <Curve as DigestPrimitive>::Digest;
 /// A hash as used by the signature scheme.
-pub type Hash = Output<Hasher>;
-#[derive(PartialEq, Eq, CandidType)]
+pub type Hash = Vec<u8>;
+#[derive(PartialEq, Default, Clone, Eq, CandidType, Deserialize)]
 /// A layer-2 account identifier.
-pub struct L2Account(VerifyingKey<Curve>);
+pub struct L2Account(pub Vec<u8>);
+#[derive(PartialEq, Default, Clone, Eq, CandidType, Deserialize)]
+pub struct L2Signature(pub Vec<u8>);
 /// A payable layer-1 account identifier.
 pub use ic_cdk::export::candid::Principal as L1Account;
 /// An amount of a currency.
@@ -50,13 +49,14 @@ pub type Nonce = Hash;
 /// Channel state version identifier.
 pub type Version = u64;
 
-#[derive(CandidType)]
+#[derive(Deserialize, CandidType)]
 pub struct Params {
-	pub none: Nonce,
+	pub nonce: Nonce,
 	pub participants: Vec<L2Account>,
 	pub challenge_duration: Duration,
 }
 
+#[derive(Deserialize, CandidType)]
 pub struct State {
 	pub channel: ChannelId,
 	pub version: Version,
@@ -64,22 +64,25 @@ pub struct State {
 	pub finalized: bool,
 }
 
+#[derive(Deserialize, CandidType)]
 pub struct FullySignedState {
 	pub state: State,
 	pub sigs: Vec<L2Signature>,
 }
 
+#[derive(Deserialize, CandidType)]
 pub struct RegisteredState {
 	pub state: State,
 	pub timeout: Timestamp,
 }
 
+#[derive(Deserialize, CandidType)]
 pub struct WithdrawalRequest {
 	pub funding: Funding,
 	pub receiver: L1Account,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Clone, Default, Deserialize, Eq, Hash, CandidType)]
 pub struct Funding {
 	pub channel: ChannelId,
 	pub participant: L2Account,
@@ -87,93 +90,53 @@ pub struct Funding {
 
 impl std::hash::Hash for L2Account {
 	fn hash<H: std::hash::Hasher>(self: &Self, state: &mut H) {
-		self.0.to_encoded_point(true).as_bytes().hash(state);
+		self.0.hash(state);
 	}
 }
 
-impl DigestVerifier<Hasher, L2Signature> for L2Account {
-	fn verify_digest(self: &Self, digest: Hasher, signature: &L2Signature) -> ecdsa::Result<()> {
-		self.0.verify_digest(digest, signature)
+impl State {
+	pub fn validate_sig(&self, sig: &L2Signature, pk: &L2Account) {
+		let enc = Encode!(self).expect("encoding state");
+		let pk = PublicKey::from_bytes(&pk.0).expect("invalid pk");
+		let sig = ed25519::signature::Signature::from_bytes(&sig.0).expect("invalid sig");
+		pk.verify(&enc, &sig).expect("wrong sig")
 	}
 }
 
-impl CandidType for L2Account {
+/*
+impl L2Account {
+	pub fn verify_digest(
+		self: &Self,
+		digest: Hasher,
+		signature: &L2Signature,
+	) -> ecdsa::Result<()> {
+		let point = EncodedPoint::<Curve>::from_bytes(signature).unwrap();
+		let pk = VerifyingKey::from_encoded_point(&point).unwrap();
+		let sig = ecdsa::Signature::from_bytes(signature).unwrap();
+		let t: BasicSigOf<Vec<u8>>;
+		pk.verify_digest(digest, &sig)
+	}
+}*/
+
+/*impl CandidType for L2Account {
 	fn idl_serialize<S>(&self, serializer: S) -> core::result::Result<(), S::Error>
 	where S: ic_cdk::export::candid::types::Serializer {
 	}
-}
+}*/
 
 impl Params {
-	pub fn idx(self: &Self, find: L2Account) -> bool {
-		for (i, acc) in self.participants.into_iter().enumerate() {
-			if acc == find {
-				return true;
-			}
-		}
-		return false;
-	}
-
 	pub fn id(self: &Self) -> ChannelId {
 		return ChannelId::default();
 	}
 
 	pub fn matches(self: &Self, state: &State) -> bool {
-		return self.id() == state.channel &&
-			self.participants.len() == state.allocation.len();
-	}
-}
-
-impl State {
-	pub fn hash(self: &Self) -> Hasher {
-		let x = Hasher::default();
-		return x;
-	}
-}
-
-impl FullySignedState {
-	pub fn verify(self: &Self, params: &Params) -> Result<()> {
-		if params.participants.len() != self.sigs.len() {
-			return Err(Error::MalformedInput);
-		}
-
-		let hash = self.state.hash();
-
-		for (i, part) in params.participants.into_iter().enumerate() {
-			if let Err(_) = part.verify_digest(hash, &self.sigs[i]) {
-				return Err(Error::InvalidSignatures);
-			}
-		}
-		Ok(())
-	}
-}
-
-impl RegisteredState {
-	pub fn settled(state: &State) -> Self {
-		return Self{
-			state: *state,
-			timeout: 0,
-		}
-	}
-
-	pub fn guard_withdraw(self: &Self, time: Timestamp) -> Result<()> {
-		if !self.state.finalized && time < self.timeout {
-			return Err(Error::NotAuthorized);
-		}
-		return Ok(());
-	}
-}
-
-impl WithdrawalRequest {
-	pub fn hash(self: &Self) -> Hasher {
-		let h = Hasher::default();
-		// TODO: encode into hasher.
-		return h;
+		return self.id() == state.channel && self.participants.len() == state.allocation.len();
 	}
 }
 
 impl Funding {
 	pub fn new(channel: ChannelId, participant: L2Account) -> Self {
-		Self{
+		Self {
 			channel: channel,
 			participant: participant,
 		}
