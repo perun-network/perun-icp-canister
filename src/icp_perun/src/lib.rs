@@ -80,6 +80,7 @@ impl CanisterState {
 			.or_insert(Default::default()) += amount;
 		Ok(())
 	}
+
 	pub fn query_deposit(&self, funding: Funding) -> Option<Amount> {
 		match self.deposits.get(&funding) {
 			None => None,
@@ -100,7 +101,7 @@ impl CanisterState {
 		Ok(())
 	}
 
-	pub fn dispute(&self, params: Params, state: FullySignedState) -> Result<()> {
+	pub fn dispute(&mut self, params: Params, state: FullySignedState) -> Result<()> {
 		for (i, pk) in params.participants.iter().enumerate() {
 			state.state.validate_sig(&state.sigs[i], &pk)?;
 		}
@@ -110,17 +111,27 @@ impl CanisterState {
 
 
 #[test]
+/// Tests that deposits are added 
 fn test_deposit() {
-	let mut canister = CanisterState::default();
-	let funding = Funding::default();
+	let channel = ChannelId::default();
+	let (mut canister, _, pk) = setup();
+	let funding = Funding::new(channel.clone(), pk);
+	let funding2 = Funding::new(channel, L2Account::default());
+	// No deposits yet.
+	assert_eq!(canister.query_deposit(funding.clone()), None);
+	assert_eq!(canister.query_deposit(funding2.clone()), None);
 	// Deposit 10.
 	assert_eq!(canister.deposit(funding.clone(), 10.into()), Ok(()));
+	assert_eq!(canister.query_deposit(funding2.clone()), None);
 	// Now 10.
 	assert_eq!(canister.query_deposit(funding.clone()), Some(10.into()));
+	assert_eq!(canister.query_deposit(funding2.clone()), None);
 	// Deposit 20.
+	assert_eq!(canister.query_deposit(funding2.clone()), None);
 	assert_eq!(canister.deposit(funding.clone(), 20.into()), Ok(()));
 	// Now 30.
 	assert_eq!(canister.query_deposit(funding), Some(30.into()));
+	assert_eq!(canister.query_deposit(funding2.clone()), None);
 }
 
 static _SECRET_KEY_BYTES: [u8; 32] = [
@@ -128,14 +139,23 @@ static _SECRET_KEY_BYTES: [u8; 32] = [
 	105, 123, 050, 105, 025, 112, 059, 172, 003, 028, 174, 127, 096,
 ];
 
-#[test]
-fn test_dispute_sig() {
+fn alice_keys() -> (ExpandedSecretKey, L2Account) {
 	let alice_sk = SecretKey::from_bytes(&_SECRET_KEY_BYTES).unwrap();
 	let alice_esk = ExpandedSecretKey::from(&alice_sk);
 	let alice_pk: PublicKey = (&alice_sk).into();
 	let alice = L2Account(alice_pk);
+	return (alice_esk, alice);
+}
 
-	let canister = CanisterState::default();
+fn setup() -> (CanisterState, ExpandedSecretKey, L2Account) {
+	let (esk, pk) = alice_keys();
+	return (CanisterState::default(), esk, pk);
+}
+
+#[test]
+fn test_dispute_sig() {
+	let (mut canister, alice_esk, alice) = setup();
+
 	let hash = vec![123u8; 32];
 	let state = State {
 		channel: hash.clone(),
@@ -144,7 +164,7 @@ fn test_dispute_sig() {
 		finalized: false,
 	};
 	let enc = Encode!(&state).unwrap();
-	let alice_sig = L2Signature(alice_esk.sign(&enc, &alice_pk).to_bytes().into());
+	let alice_sig = L2Signature(alice_esk.sign(&enc, &alice.0).to_bytes().into());
 
 	let sstate = FullySignedState {
 		state: state,
