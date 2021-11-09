@@ -25,7 +25,7 @@ macro_rules! ensure {
 	};
 }
 
-#[derive(PartialEq, Eq, CandidType)]
+#[derive(PartialEq, Eq, CandidType, Debug)]
 /// Contains all errors that can occur during an operation on the Perun
 /// canister.
 pub enum Error {
