@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::cell::RefCell;
 pub mod error;
 pub mod types;
+pub mod test;
 
 use types::*;
 use error::*;
@@ -29,7 +30,7 @@ thread_local! {
 #[derive(Default)]
 /// The canister's state. Contains all currently registered channels, as well as
 /// all deposits and withdrawable balances.
-struct CanisterState {
+pub struct CanisterState {
 	/// Tracks all deposits for unregistered channels. For registered channels,
 	/// tracks withdrawable balances instead.
 	deposits: HashMap<Funding, Amount>,
@@ -114,7 +115,7 @@ impl CanisterState {
 /// Tests that deposits are added 
 fn test_deposit() {
 	let channel = ChannelId::default();
-	let (mut canister, _, pk) = setup();
+	let (mut canister, _, pk) = test::setup();
 	let funding = Funding::new(channel.clone(), pk);
 	let funding2 = Funding::new(channel, L2Account::default());
 	// No deposits yet.
@@ -134,27 +135,9 @@ fn test_deposit() {
 	assert_eq!(canister.query_deposit(funding2.clone()), None);
 }
 
-static _SECRET_KEY_BYTES: [u8; 32] = [
-	157, 097, 177, 157, 239, 253, 090, 096, 186, 132, 074, 244, 146, 236, 044, 196, 068, 073, 197,
-	105, 123, 050, 105, 025, 112, 059, 172, 003, 028, 174, 127, 096,
-];
-
-fn alice_keys() -> (ExpandedSecretKey, L2Account) {
-	let alice_sk = SecretKey::from_bytes(&_SECRET_KEY_BYTES).unwrap();
-	let alice_esk = ExpandedSecretKey::from(&alice_sk);
-	let alice_pk: PublicKey = (&alice_sk).into();
-	let alice = L2Account(alice_pk);
-	return (alice_esk, alice);
-}
-
-fn setup() -> (CanisterState, ExpandedSecretKey, L2Account) {
-	let (esk, pk) = alice_keys();
-	return (CanisterState::default(), esk, pk);
-}
-
 #[test]
 fn test_dispute_sig() {
-	let (mut canister, alice_esk, alice) = setup();
+	let (mut canister, alice_esk, alice) = test::setup();
 
 	let hash = vec![123u8; 32];
 	let state = State {
