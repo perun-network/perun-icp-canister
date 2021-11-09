@@ -15,26 +15,31 @@
 use std::collections::HashMap;
 pub mod error;
 pub mod types;
-use candid::Encode;
-use ed25519_dalek::{ExpandedSecretKey, Keypair, PublicKey, SecretKey, Signer, Verifier};
-use error::*;
-use ic_cdk::api::{caller, time};
-use num_bigint::BigUint;
+
 use std::cell::RefCell;
-use std::result::Result;
 use types::*;
+use ed25519_dalek::{SecretKey, PublicKey, ExpandedSecretKey};
+use candid::Encode;
 
 thread_local! {
 	static STATE: CanisterState = Default::default();
 }
 
 #[derive(Default)]
+/// The canister's state. Contains all currently registered channels, as well as
+/// all deposits and withdrawable balances.
 struct CanisterState {
+	/// Tracks all deposits for unregistered channels. For registered channels,
+	/// tracks withdrawable balances instead.
 	deposits: RefCell<HashMap<Funding, Amount>>,
-	channels: RefCell<HashMap<ChannelId, RegisteredState>>,
+	/// Tracks all registered channels.
+	_channels: RefCell<HashMap<ChannelId, RegisteredState>>,
 }
 
 #[ic_cdk_macros::update]
+/// Deposits funds for the specified participant into the specified channel.
+/// Please do NOT over-fund or fund channels that are already fully funded, as
+/// this can lead to a permanent LOSS OF FUNDS.
 fn deposit(funding: Funding, amount: Amount) {
 	STATE.with(|s| {
 		*s.deposits
@@ -49,22 +54,26 @@ fn deposit(funding: Funding, amount: Amount) {
 /// Starts a dispute settlement for a non-finalized channel. Other participants
 /// will have to reply with a call to 'dispute' within the channel's challenge
 /// duration to register a more recent channel state if exists. After the
-/// challenge duration elapsed, the channel will be marked as finalized.
-fn dispute(params: Params, state: FullySignedState) -> () {
+/// challenge duration elapsed, the channel will be marked as settled.
+fn dispute(params: Params, state: FullySignedState) {
 	for (i, pk) in params.participants.iter().enumerate() {
 		state.state.validate_sig(&state.sigs[i], &pk);
 	}
 }
 
 #[ic_cdk_macros::update]
-/// Settles a finalized channel. It can then be used for withdrawing.
-fn conclude(params: Params, state: FullySignedState) -> () {}
+/// Settles a finalized channel and makes its final funds distribution
+/// withdrawable.
+fn conclude(_params: Params, _state: FullySignedState) -> () { }
 
 #[ic_cdk_macros::update]
-/// Withdraws funds from a settled channel.
-fn withdraw(withdrawal: WithdrawalRequest, withdrawal_sig: L2Signature) -> () {}
+/// Withdraws the specified participant's funds from a settled channel.
+fn withdraw(_request: WithdrawalRequest, _auth: L2Signature) -> () {}
 
 #[ic_cdk_macros::query]
+/// Returns the funds deposited for a channel's specified participant, if any.
+/// this function should be used to check whether all participants have
+/// deposited their owed funds into a channel to ensure it is fully funded.
 fn query_deposit(funding: Funding) -> Option<Amount> {
 	STATE.with(|s| {
 		let deposits = s.deposits.borrow();
@@ -89,21 +98,21 @@ fn test_deposit() {
 	assert_eq!(query_deposit(funding), Some(30.into()));
 }
 
-static secret_key_bytes: [u8; 32] = [
+static _SECRET_KEY_BYTES: [u8; 32] = [
 	157, 097, 177, 157, 239, 253, 090, 096, 186, 132, 074, 244, 146, 236, 044, 196, 068, 073, 197,
 	105, 123, 050, 105, 025, 112, 059, 172, 003, 028, 174, 127, 096,
 ];
 
 #[test]
 fn test_dispute_sig() {
-	let alice_sk = SecretKey::from_bytes(&secret_key_bytes).unwrap();
+	let alice_sk = SecretKey::from_bytes(&_SECRET_KEY_BYTES).unwrap();
 	let alice_esk = ExpandedSecretKey::from(&alice_sk);
 	let alice_pk: PublicKey = (&alice_sk).into();
-	let alice = L2Account(alice_pk.to_bytes().into());
+	let alice = L2Account(alice_pk);
 
 	STATE.with(|_| {}); // init
 	let hash = vec![123u8; 32];
-	let mut state = State {
+	let state = State {
 		channel: hash.clone(),
 		version: 564,
 		allocation: vec![10.into()],
