@@ -34,6 +34,10 @@ pub enum Error {
 	/// A non-finalized state was registered when a finalized state was
 	/// expected.
 	NotFinalized,
+	/// A channel has been concluded or disputed after conclusion.
+	AlreadyConcluded,
+	/// In some way, the input was invalid.
+	InvalidInput
 }
 
 /// Canister operation result type.
