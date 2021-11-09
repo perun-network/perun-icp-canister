@@ -204,6 +204,26 @@ impl Params {
 	}
 }
 
+// FullySignedState
+
+impl FullySignedState {
+	pub fn validate(&self, params: &Params) -> CanisterResult<()> {
+		if self.state.channel != params.id() {
+			Err(CError::InvalidInput)?;
+		}
+		for (i, pk) in params.participants.iter().enumerate() {
+			self.state.validate_sig(&self.sigs[i], &pk)?;
+		}
+		Ok(())
+	}
+
+	pub fn validate_final(&self, params: &Params) -> CanisterResult<()> {
+		if !self.state.finalized {
+			Err(CError::NotFinalized)?;
+		}
+		self.validate(params)
+	}
+}
 // Funding
 
 impl Funding {
