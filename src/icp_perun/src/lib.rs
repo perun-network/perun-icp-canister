@@ -19,8 +19,7 @@ pub mod types;
 
 use types::*;
 use error::*;
-use ed25519_dalek::{SecretKey, PublicKey, ExpandedSecretKey};
-use candid::Encode;
+use ic_cdk::api::time as blocktime;
 
 thread_local! {
 	static STATE: RefCell<CanisterState> = Default::default();
@@ -34,7 +33,7 @@ struct CanisterState {
 	/// tracks withdrawable balances instead.
 	deposits: HashMap<Funding, Amount>,
 	/// Tracks all registered channels.
-	_channels: HashMap<ChannelId, RegisteredState>,
+	channels: HashMap<ChannelId, RegisteredState>,
 }
 
 #[ic_cdk_macros::update]
@@ -57,7 +56,9 @@ fn dispute(params: Params, state: FullySignedState) -> Option<Error> {
 #[ic_cdk_macros::update]
 /// Settles a finalized channel and makes its final funds distribution
 /// withdrawable.
-fn conclude(_params: Params, _state: FullySignedState) -> () { }
+fn conclude(params: Params, state: FullySignedState) -> Option<Error> {
+	STATE.with(|s| s.borrow_mut().conclude(params, state, blocktime())).err()
+}
 
 #[ic_cdk_macros::update]
 /// Withdraws the specified participant's funds from a settled channel.
@@ -83,6 +84,19 @@ impl CanisterState {
 			None => None,
 			Some(a) => Some(a.clone()),
 		}
+	}
+
+	pub fn conclude(&mut self, params: Params, state: FullySignedState, now: Timestamp) -> Result<()> {
+		if let Some(old_state) = self.channels.get(&state.state.channel) {
+			if old_state.settled(now) {
+				Err(Error::AlreadyConcluded)?;
+			}
+		}
+
+		self.channels.insert(
+			state.state.channel.clone(),
+			RegisteredState::conclude(state, &params)?);
+		Ok(())
 	}
 
 	pub fn dispute(&self, params: Params, state: FullySignedState) -> Result<()> {

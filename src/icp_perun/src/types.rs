@@ -204,6 +204,52 @@ impl Params {
 	}
 }
 
+// FullySignedState
+
+impl FullySignedState {
+	pub fn validate(&self, params: &Params) -> CanisterResult<()> {
+		if self.state.channel != params.id() {
+			Err(CError::InvalidInput)?;
+		}
+		for (i, pk) in params.participants.iter().enumerate() {
+			self.state.validate_sig(&self.sigs[i], &pk)?;
+		}
+		Ok(())
+	}
+
+	pub fn validate_final(&self, params: &Params) -> CanisterResult<()> {
+		if !self.state.finalized {
+			Err(CError::NotFinalized)?;
+		}
+		self.validate(params)
+	}
+}
+
+// RegisteredState
+
+impl RegisteredState {
+	pub fn conclude(state: FullySignedState, params: &Params) -> CanisterResult<Self> {
+		state.validate_final(params)?;
+		Ok(Self {
+			state: state.state,
+			timeout: Default::default(),
+		})
+	}
+
+	pub fn dispute(state: FullySignedState, params: &Params, now: Timestamp) -> CanisterResult<Self> {
+		state.validate(params)?;
+		Ok(Self{
+			state: state.state,
+			timeout: now + params.challenge_duration,
+		})
+	}
+
+	pub fn settled(&self, now: Timestamp) -> bool {
+		self.state.finalized || now >= self.timeout
+	}
+}
+
+
 // Funding
 
 impl Funding {
