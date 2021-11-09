@@ -20,3 +20,16 @@ macro_rules! ensure {
 		}
 	};
 }
+
+/// Contains all errors that can occur during an operation on the Perun
+/// canister.
+pub enum Error {
+	/// Any kind of signature mismatch.
+	Authentication,
+	/// A non-finalized state was registered when a finalized state was
+	/// expected.
+	NotFinalized,
+}
+
+/// Canister operation result type.
+pub type Result<T> = core::result::Result<T, Error>;
