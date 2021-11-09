@@ -13,16 +13,17 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
+use std::cell::RefCell;
 pub mod error;
 pub mod types;
 
-use std::cell::RefCell;
 use types::*;
+use error::*;
 use ed25519_dalek::{SecretKey, PublicKey, ExpandedSecretKey};
 use candid::Encode;
 
 thread_local! {
-	static STATE: CanisterState = Default::default();
+	static STATE: RefCell<CanisterState> = Default::default();
 }
 
 #[derive(Default)]
@@ -31,23 +32,17 @@ thread_local! {
 struct CanisterState {
 	/// Tracks all deposits for unregistered channels. For registered channels,
 	/// tracks withdrawable balances instead.
-	deposits: RefCell<HashMap<Funding, Amount>>,
+	deposits: HashMap<Funding, Amount>,
 	/// Tracks all registered channels.
-	_channels: RefCell<HashMap<ChannelId, RegisteredState>>,
+	_channels: HashMap<ChannelId, RegisteredState>,
 }
 
 #[ic_cdk_macros::update]
 /// Deposits funds for the specified participant into the specified channel.
 /// Please do NOT over-fund or fund channels that are already fully funded, as
 /// this can lead to a permanent LOSS OF FUNDS.
-fn deposit(funding: Funding, amount: Amount) {
-	STATE.with(|s| {
-		*s.deposits
-			.borrow_mut()
-			.entry(funding)
-			.or_insert(Default::default()) += amount
-	});
-	()
+fn deposit(funding: Funding, amount: Amount) -> Option<Error> {
+	STATE.with(|s| s.borrow_mut().deposit(funding, amount)).err()
 }
 
 #[ic_cdk_macros::update]
@@ -55,10 +50,8 @@ fn deposit(funding: Funding, amount: Amount) {
 /// will have to reply with a call to 'dispute' within the channel's challenge
 /// duration to register a more recent channel state if exists. After the
 /// challenge duration elapsed, the channel will be marked as settled.
-fn dispute(params: Params, state: FullySignedState) {
-	for (i, pk) in params.participants.iter().enumerate() {
-		state.state.validate_sig(&state.sigs[i], &pk);
-	}
+fn dispute(params: Params, state: FullySignedState) -> Option<Error> {
+	STATE.with(|s| s.borrow_mut().dispute(params, state)).err()
 }
 
 #[ic_cdk_macros::update]
@@ -75,27 +68,44 @@ fn withdraw(_request: WithdrawalRequest, _auth: L2Signature) -> () {}
 /// this function should be used to check whether all participants have
 /// deposited their owed funds into a channel to ensure it is fully funded.
 fn query_deposit(funding: Funding) -> Option<Amount> {
-	STATE.with(|s| {
-		let deposits = s.deposits.borrow();
-		match deposits.get(&funding) {
+	STATE.with(|s| s.borrow().query_deposit(funding))
+}
+
+impl CanisterState {
+	pub fn deposit(&mut self, funding: Funding, amount: Amount) -> Result<()> {
+		*self.deposits
+			.entry(funding)
+			.or_insert(Default::default()) += amount;
+		Ok(())
+	}
+	pub fn query_deposit(&self, funding: Funding) -> Option<Amount> {
+		match self.deposits.get(&funding) {
 			None => None,
 			Some(a) => Some(a.clone()),
 		}
-	})
+	}
+
+	pub fn dispute(&self, params: Params, state: FullySignedState) -> Result<()> {
+		for (i, pk) in params.participants.iter().enumerate() {
+			state.state.validate_sig(&state.sigs[i], &pk)?;
+		}
+		Ok(())
+	}
 }
+
 
 #[test]
 fn test_deposit() {
-	STATE.with(|_| {}); // init
+	let mut canister = CanisterState::default();
 	let funding = Funding::default();
 	// Deposit 10.
-	deposit(funding.clone(), 10.into());
+	assert_eq!(canister.deposit(funding.clone(), 10.into()), Ok(()));
 	// Now 10.
-	assert_eq!(query_deposit(funding.clone()), Some(10.into()));
+	assert_eq!(canister.query_deposit(funding.clone()), Some(10.into()));
 	// Deposit 20.
-	deposit(funding.clone(), 20.into());
+	assert_eq!(canister.deposit(funding.clone(), 20.into()), Ok(()));
 	// Now 30.
-	assert_eq!(query_deposit(funding), Some(30.into()));
+	assert_eq!(canister.query_deposit(funding), Some(30.into()));
 }
 
 static _SECRET_KEY_BYTES: [u8; 32] = [
@@ -110,7 +120,7 @@ fn test_dispute_sig() {
 	let alice_pk: PublicKey = (&alice_sk).into();
 	let alice = L2Account(alice_pk);
 
-	STATE.with(|_| {}); // init
+	let canister = CanisterState::default();
 	let hash = vec![123u8; 32];
 	let state = State {
 		channel: hash.clone(),
@@ -130,5 +140,5 @@ fn test_dispute_sig() {
 		participants: vec![alice],
 		challenge_duration: 123,
 	};
-	dispute(params, sstate);
+	assert_eq!(canister.dispute(params, sstate), Ok(()));
 }

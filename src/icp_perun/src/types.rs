@@ -14,6 +14,10 @@
 
 use core::cmp::*;
 use candid::Encode;
+use crate::error::{
+	Error as CError,
+	Result as CanisterResult,
+};
 pub use ic_cdk::export::candid::{
 	CandidType, Deserialize,
 	Int, Nat,
@@ -182,9 +186,9 @@ impl CandidType for L2Signature {
 // State
 
 impl State {
-	pub fn validate_sig(&self, sig: &L2Signature, pk: &L2Account) -> bool {
+	pub fn validate_sig(&self, sig: &L2Signature, pk: &L2Account) -> CanisterResult<()> {
 		let enc = Encode!(self).expect("encoding state");
-		pk.0.verify_strict(&enc, &sig.0).is_ok()
+		pk.0.verify_strict(&enc, &sig.0).ok().ok_or(CError::Authentication)
 	}
 }
 
