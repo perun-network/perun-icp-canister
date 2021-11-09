@@ -50,10 +50,8 @@ fn deposit(funding: Funding, amount: Amount) -> Option<Error> {
 /// will have to reply with a call to 'dispute' within the channel's challenge
 /// duration to register a more recent channel state if exists. After the
 /// challenge duration elapsed, the channel will be marked as settled.
-fn dispute(params: Params, state: FullySignedState) {
-	for (i, pk) in params.participants.iter().enumerate() {
-		state.state.validate_sig(&state.sigs[i], &pk);
-	}
+fn dispute(params: Params, state: FullySignedState) -> Option<Error> {
+	STATE.with(|s| s.dispute(params, state)).err()
 }
 
 #[ic_cdk_macros::update]
@@ -87,6 +85,13 @@ impl CanisterState {
 			.or_insert(Default::default()) += amount;
 		Ok(())
 	}
+
+	pub fn dispute(&self, params: Params, state: FullySignedState) -> Result<()> {
+		for (i, pk) in params.participants.iter().enumerate() {
+			state.state.validate_sig(&state.sigs[i], &pk)?;
+		}
+		Ok(())
+	}
 }
 
 
@@ -116,7 +121,7 @@ fn test_dispute_sig() {
 	let alice_pk: PublicKey = (&alice_sk).into();
 	let alice = L2Account(alice_pk);
 
-	STATE.with(|_| {}); // init
+	let canister = CanisterState::default();
 	let hash = vec![123u8; 32];
 	let state = State {
 		channel: hash.clone(),
@@ -136,5 +141,5 @@ fn test_dispute_sig() {
 		participants: vec![alice],
 		challenge_duration: 123,
 	};
-	dispute(params, sstate);
+	assert_eq!(canister.dispute(params, sstate), Ok(()));
 }
