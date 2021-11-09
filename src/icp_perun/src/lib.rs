@@ -19,8 +19,6 @@ pub mod types;
 
 use types::*;
 use error::*;
-use ed25519_dalek::{SecretKey, PublicKey, ExpandedSecretKey};
-use candid::Encode;
 use ic_cdk::api::time as blocktime;
 
 thread_local! {
