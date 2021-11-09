@@ -20,6 +20,7 @@ pub mod types;
 use types::*;
 use error::*;
 use ic_cdk::api::time as blocktime;
+use candid::Encode;
 
 thread_local! {
 	static STATE: RefCell<CanisterState> = Default::default();
