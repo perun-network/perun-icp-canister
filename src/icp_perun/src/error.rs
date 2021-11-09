@@ -12,6 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use ic_cdk::export::candid::{
+	CandidType,
+};
+
 #[macro_export]
 macro_rules! ensure {
 	($cond:expr) => {
@@ -21,6 +25,7 @@ macro_rules! ensure {
 	};
 }
 
+#[derive(PartialEq, Eq, CandidType)]
 /// Contains all errors that can occur during an operation on the Perun
 /// canister.
 pub enum Error {

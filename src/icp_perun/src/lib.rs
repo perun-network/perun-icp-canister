@@ -18,6 +18,7 @@ pub mod types;
 
 use std::cell::RefCell;
 use types::*;
+use error::*;
 use ed25519_dalek::{SecretKey, PublicKey, ExpandedSecretKey};
 use candid::Encode;
 
@@ -40,14 +41,8 @@ struct CanisterState {
 /// Deposits funds for the specified participant into the specified channel.
 /// Please do NOT over-fund or fund channels that are already fully funded, as
 /// this can lead to a permanent LOSS OF FUNDS.
-fn deposit(funding: Funding, amount: Amount) {
-	STATE.with(|s| {
-		*s.deposits
-			.borrow_mut()
-			.entry(funding)
-			.or_insert(Default::default()) += amount
-	});
-	()
+fn deposit(funding: Funding, amount: Amount) -> Option<Error> {
+	STATE.with(|s| s.deposit(funding, amount)).err()
 }
 
 #[ic_cdk_macros::update]
@@ -84,18 +79,29 @@ fn query_deposit(funding: Funding) -> Option<Amount> {
 	})
 }
 
+impl CanisterState {
+	pub fn deposit(&self, funding: Funding, amount: Amount) -> Result<()> {
+		*self.deposits
+			.borrow_mut()
+			.entry(funding)
+			.or_insert(Default::default()) += amount;
+		Ok(())
+	}
+}
+
+
 #[test]
 fn test_deposit() {
-	STATE.with(|_| {}); // init
+	let canister = CanisterState::default();
 	let funding = Funding::default();
 	// Deposit 10.
-	deposit(funding.clone(), 10.into());
+	assert_eq!(canister.deposit(funding.clone(), 10.into()), Ok(()));
 	// Now 10.
-	assert_eq!(query_deposit(funding.clone()), Some(10.into()));
+	assert_eq!(canister.query_deposit(funding.clone()), Some(10.into()));
 	// Deposit 20.
-	deposit(funding.clone(), 20.into());
+	assert_eq!(canister.deposit(funding.clone(), 20.into()), Ok(()));
 	// Now 30.
-	assert_eq!(query_deposit(funding), Some(30.into()));
+	assert_eq!(canister.query_deposit(funding), Some(30.into()));
 }
 
 static _SECRET_KEY_BYTES: [u8; 32] = [
