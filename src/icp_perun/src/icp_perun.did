@@ -1,8 +1,33 @@
 type Error = uint8;
-type ChannelId = blob;
 type L2Account = blob;
+type Timestamp = nat64;
+type Duration = nat64;
+type Hash = blob;
+type Nonce = Hash;
+type ChannelId = Hash;
+type Amount = nat;
+
 type Funding = record { channel: ChannelId; participant: L2Account; };
 
+type Params = record {
+	nonce: Nonce;
+	participants: vec L2Account;
+	challenge_duration: Duration;
+};
+
+type State = record {
+	channel: ChannelId;
+	version: nat64;
+	allocation: vec Amount;
+	finalized: bool;
+}
+
+type FullySignedState = record {
+	state: State;
+	sigs: vec blob;
+}
+
 service : {
-	"deposit": (Funding) -> (opt Error);
+	"deposit": (Funding, Amount) -> (opt Error);
+	"conclude": (Params, FullySignedState) -> (opt Error);
 }
