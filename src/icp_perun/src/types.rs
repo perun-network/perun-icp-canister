@@ -59,7 +59,7 @@ pub type Nonce = Hash;
 /// Channel state version identifier.
 pub type Version = u64;
 
-#[derive(Deserialize, CandidType)]
+#[derive(Deserialize, CandidType, Default)]
 /// The immutable parameters and state of a Perun channel.
 pub struct Params {
 	/// The channel's unique nonce, to protect against replay attacks.
@@ -70,7 +70,7 @@ pub struct Params {
 	pub challenge_duration: Duration,
 }
 
-#[derive(Deserialize, CandidType)]
+#[derive(Deserialize, CandidType, Default)]
 /// The mutable parameters and state of a Perun channel. Contains 
 pub struct State {
 	/// The cannel's unique identifier.
@@ -87,7 +87,7 @@ pub struct State {
 	pub finalized: bool,
 }
 
-#[derive(Deserialize, CandidType)]
+#[derive(Deserialize, CandidType, Default)]
 /// A channel state, signed by all participants.
 pub struct FullySignedState {
 	/// The channel's state.
@@ -196,7 +196,7 @@ impl State {
 
 impl Params {
 	pub fn id(self: &Self) -> ChannelId {
-		return ChannelId::default();
+		return Encode!(self).unwrap();
 	}
 
 	pub fn matches(self: &Self, state: &State) -> bool {
@@ -209,6 +209,12 @@ impl Params {
 impl FullySignedState {
 	pub fn validate(&self, params: &Params) -> CanisterResult<()> {
 		if self.state.channel != params.id() {
+			Err(CError::InvalidInput)?;
+		}
+		if self.sigs.len() != params.participants.len() {
+			Err(CError::InvalidInput)?;
+		}
+		if self.sigs.len() != self.state.allocation.len() {
 			Err(CError::InvalidInput)?;
 		}
 		for (i, pk) in params.participants.iter().enumerate() {
