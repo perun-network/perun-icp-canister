@@ -196,6 +196,25 @@ fn test_conclude_not_signed() {
 }
 
 #[test]
+/// Tests that invalid sized allocations are rejected.
+fn test_conclude_invalid_allocation() {
+	let (mut canister, sk, pk) = test::setup();
+	let mut params = Params::default();
+	params.participants = vec![pk.clone()];
+	let mut state = State::default();
+	state.channel = params.id();
+	state.version = 1;
+	state.finalized = true;
+
+	let enc = Encode!(&state).unwrap();
+	let mut signed = FullySignedState::default();
+	signed.state = state;
+	signed.sigs = vec![L2Signature(sk.sign(&enc, &pk.0).to_bytes().into())];
+
+	assert_eq!(canister.conclude(params, signed, 0), Err(Error::InvalidInput));
+}
+
+#[test]
 fn test_dispute_sig() {
 	let (mut canister, alice_esk, alice) = test::setup();
 
