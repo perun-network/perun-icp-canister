@@ -136,6 +136,26 @@ fn test_deposit() {
 }
 
 #[test]
+/// Tests the happy conclude path.
+fn test_conclude() {
+	let (mut canister, sk, pk) = test::setup();
+	let mut params = Params::default();
+	params.participants = vec![pk.clone()];
+	let mut state = State::default();
+	state.channel = params.id();
+	state.version = 1;
+	state.allocation = vec![10.into()];
+	state.finalized = true;
+
+	let enc = Encode!(&state).unwrap();
+	let mut signed = FullySignedState::default();
+	signed.state = state;
+	signed.sigs = vec![L2Signature(sk.sign(&enc, &pk.0).to_bytes().into())];
+
+	assert_eq!(canister.conclude(params, signed, 0), Ok(()));
+}
+
+#[test]
 fn test_dispute_sig() {
 	let (mut canister, alice_esk, alice) = test::setup();
 
