@@ -196,7 +196,7 @@ impl State {
 
 impl Params {
 	pub fn id(self: &Self) -> ChannelId {
-		return ChannelId::default();
+		return Encode!(self).unwrap();
 	}
 
 	pub fn matches(self: &Self, state: &State) -> bool {
