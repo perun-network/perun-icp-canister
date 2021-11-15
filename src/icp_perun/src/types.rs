@@ -236,7 +236,7 @@ impl State {
 
 impl Params {
 	pub fn id(self: &Self) -> ChannelId {
-		return Encode!(self).unwrap();
+		Hash::digest(&Encode!(self).unwrap())
 	}
 
 	pub fn matches(self: &Self, state: &State) -> bool {
