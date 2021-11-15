@@ -113,25 +113,25 @@ impl CanisterState {
 #[test]
 /// Tests that deposits are added 
 fn test_deposit() {
-	let channel = ChannelId::default();
-	let (mut canister, _, pk) = test::setup();
-	let funding = Funding::new(channel.clone(), pk);
-	let funding2 = Funding::new(channel, L2Account::default());
+	let mut s = test::Setup::new(0xd4, false);
+
+	let funding = Funding::new(s.params.id(), s.parts[0].clone());
+	let funding2 = Funding::new(s.params.id(), s.parts[1].clone());
 	// No deposits yet.
-	assert_eq!(canister.query_deposit(funding.clone()), None);
-	assert_eq!(canister.query_deposit(funding2.clone()), None);
+	assert_eq!(s.canister.query_deposit(funding.clone()), None);
+	assert_eq!(s.canister.query_deposit(funding2.clone()), None);
 	// Deposit 10.
-	assert_eq!(canister.deposit(funding.clone(), 10.into()), Ok(()));
-	assert_eq!(canister.query_deposit(funding2.clone()), None);
+	assert_eq!(s.canister.deposit(funding.clone(), 10.into()), Ok(()));
+	assert_eq!(s.canister.query_deposit(funding2.clone()), None);
 	// Now 10.
-	assert_eq!(canister.query_deposit(funding.clone()), Some(10.into()));
-	assert_eq!(canister.query_deposit(funding2.clone()), None);
+	assert_eq!(s.canister.query_deposit(funding.clone()), Some(10.into()));
+	assert_eq!(s.canister.query_deposit(funding2.clone()), None);
 	// Deposit 20.
-	assert_eq!(canister.query_deposit(funding2.clone()), None);
-	assert_eq!(canister.deposit(funding.clone(), 20.into()), Ok(()));
+	assert_eq!(s.canister.query_deposit(funding2.clone()), None);
+	assert_eq!(s.canister.deposit(funding.clone(), 20.into()), Ok(()));
 	// Now 30.
-	assert_eq!(canister.query_deposit(funding), Some(30.into()));
-	assert_eq!(canister.query_deposit(funding2.clone()), None);
+	assert_eq!(s.canister.query_deposit(funding), Some(30.into()));
+	assert_eq!(s.canister.query_deposit(funding2.clone()), None);
 }
 
 #[test]
