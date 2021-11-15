@@ -12,24 +12,66 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use ed25519_dalek::{SecretKey, PublicKey, ExpandedSecretKey};
+use ed25519_dalek::{SecretKey, ExpandedSecretKey};
 use crate::types::*;
 use crate::CanisterState;
+use candid::Encode;
 
-static SECRET_KEY_BYTES: [u8; 32] = [
-	157, 097, 177, 157, 239, 253, 090, 096, 186, 132, 074, 244, 146, 236, 044, 196, 068, 073, 197,
-	105, 123, 050, 105, 025, 112, 059, 172, 003, 028, 174, 127, 096,
-];
-
-pub fn alice_keys() -> (ExpandedSecretKey, L2Account) {
-	let alice_sk = SecretKey::from_bytes(&SECRET_KEY_BYTES).unwrap();
-	let alice_esk = ExpandedSecretKey::from(&alice_sk);
-	let alice_pk: PublicKey = (&alice_sk).into();
-	let alice = L2Account(alice_pk);
-	return (alice_esk, alice);
+#[derive(Default)]
+pub struct Setup {
+	pub parts: Vec<L2Account>,
+	pub secrets: Vec<ExpandedSecretKey>,
+	pub canister: CanisterState,
+	pub params: Params,
+	pub state: State,
 }
 
-pub fn setup() -> (CanisterState, ExpandedSecretKey, L2Account) {
-	let (esk, pk) = alice_keys();
-	return (CanisterState::default(), esk, pk);
+pub fn keys(rand: u8, id: u8) -> (ExpandedSecretKey, L2Account) {
+	let hash = Hash::digest(&[rand, id, 1, 2, 3]).0;
+	let sk = SecretKey::from_bytes(&hash.as_slice()[..32]).unwrap();
+	let esk = ExpandedSecretKey::from(&sk);
+	let pk = L2Account((&sk).into());
+	return (esk, pk)
+}
+
+impl Setup {
+	pub fn new(rand: u8, finalized: bool) -> Self {
+		let mut ret = Self::default();
+		let key0 = keys(rand, 0);
+		let key1 = keys(rand, 1);
+		ret.parts = vec![key0.1, key1.1];
+		ret.secrets = vec![key0.0, key1.0];
+
+		ret.params.nonce = Hash::digest(&[rand, 0]);
+		ret.params.participants = ret.parts.clone();
+
+		ret.state.channel = ret.params.id();
+		ret.state.version = (rand as u64) * 123;
+		ret.state.allocation = vec![
+			ret.params.nonce.0[0].into(),
+			ret.params.nonce.0[1].into(),
+		];
+		ret.state.finalized = finalized;
+
+		return ret
+	}
+
+	pub fn sign(&self) -> FullySignedState {
+		self.sign_encoding(&Encode!(&self.state).unwrap())
+	}
+	pub fn sign_invalid(&self) -> FullySignedState {
+		self.sign_encoding(&Encode!(&"invalid state").unwrap())
+	}
+
+
+
+	fn sign_encoding(&self, enc: &[u8]) -> FullySignedState {
+		let mut state = FullySignedState::default();
+		state.state = self.state.clone();
+		for (i, key) in self.parts.iter().enumerate() {
+			state.sigs.push(L2Signature(self.secrets[i].sign(&enc, &key.0).to_bytes().into()))
+		}
+
+		return state
+	}
 }
