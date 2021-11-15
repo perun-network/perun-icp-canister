@@ -72,7 +72,7 @@ pub struct Params {
 	pub challenge_duration: Duration,
 }
 
-#[derive(Deserialize, CandidType, Default)]
+#[derive(Deserialize, CandidType, Default, Clone)]
 /// The mutable parameters and state of a Perun channel. Contains 
 pub struct State {
 	/// The cannel's unique identifier.
