@@ -183,7 +183,7 @@ fn test_conclude_invalid_params() {
 	params.participants = vec![pk.clone()];
 	let mut state = State::default();
 	state.channel = params.id();
-	params.nonce = vec![1];
+	params.nonce = Hash::digest(&[1]);
 	state.version = 1;
 	state.allocation = vec![10.into()];
 	state.finalized = true;
@@ -239,7 +239,7 @@ fn test_conclude_invalid_allocation() {
 fn test_dispute_sig() {
 	let (mut canister, alice_esk, alice) = test::setup();
 
-	let hash = vec![123u8; 32];
+	let hash = Hash::digest(&[123]);
 	let state = State {
 		channel: hash.clone(),
 		version: 564,
