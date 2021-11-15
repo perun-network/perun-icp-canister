@@ -21,7 +21,6 @@ pub mod test;
 use types::*;
 use error::*;
 use ic_cdk::api::time as blocktime;
-use candid::Encode;
 
 thread_local! {
 	static STATE: RefCell<CanisterState> = Default::default();
@@ -138,125 +137,48 @@ fn test_deposit() {
 #[test]
 /// Tests the happy conclude path.
 fn test_conclude() {
-	let (mut canister, sk, pk) = test::setup();
-	let mut params = Params::default();
-	params.participants = vec![pk.clone()];
-	let mut state = State::default();
-	state.channel = params.id();
-	state.version = 1;
-	state.allocation = vec![10.into()];
-	state.finalized = true;
-
-	let enc = Encode!(&state).unwrap();
-	let mut signed = FullySignedState::default();
-	signed.state = state;
-	signed.sigs = vec![L2Signature(sk.sign(&enc, &pk.0).to_bytes().into())];
-
-	assert_eq!(canister.conclude(params, signed, 0), Ok(()));
+	let mut s = test::Setup::new(0xb2, true);
+	let sstate = s.sign();
+	assert_eq!(s.canister.conclude(s.params, sstate, 0), Ok(()));
 }
 
 #[test]
 /// Tests that nonfinal channels cannot be concluded.
 fn test_conclude_nonfinal() {
-	let (mut canister, sk, pk) = test::setup();
-	let mut params = Params::default();
-	params.participants = vec![pk.clone()];
-	let mut state = State::default();
-	state.channel = params.id();
-	state.version = 1;
-	state.allocation = vec![10.into()];
-	state.finalized = false;
-
-	let enc = Encode!(&state).unwrap();
-	let mut signed = FullySignedState::default();
-	signed.state = state;
-	signed.sigs = vec![L2Signature(sk.sign(&enc, &pk.0).to_bytes().into())];
-
-	assert_eq!(canister.conclude(params, signed, 0), Err(Error::NotFinalized));
+	let mut s = test::Setup::new(0x1b, false);
+	let sstate = s.sign();
+	assert_eq!(s.canister.conclude(s.params, sstate, 0), Err(Error::NotFinalized));
 }
 
 #[test]
 /// Tests that params match the state.
 fn test_conclude_invalid_params() {
-	let (mut canister, sk, pk) = test::setup();
-	let mut params = Params::default();
-	params.participants = vec![pk.clone()];
-	let mut state = State::default();
-	state.channel = params.id();
-	params.nonce = Hash::digest(&[1]);
-	state.version = 1;
-	state.allocation = vec![10.into()];
-	state.finalized = true;
-
-	let enc = Encode!(&state).unwrap();
-	let mut signed = FullySignedState::default();
-	signed.state = state;
-	signed.sigs = vec![L2Signature(sk.sign(&enc, &pk.0).to_bytes().into())];
-
-	assert_eq!(canister.conclude(params, signed, 0), Err(Error::InvalidInput));
+	let mut s = test::Setup::new(0x23, true);
+	let sstate = s.sign();
+	s.params.challenge_duration += 1;
+	assert_eq!(s.canister.conclude(s.params, sstate, 0), Err(Error::InvalidInput));
 }
 
 #[test]
 /// Tests that only signed channels can be concluded.
 fn test_conclude_not_signed() {
-	let (mut canister, sk, pk) = test::setup();
-	let mut params = Params::default();
-	params.participants = vec![pk.clone()];
-	let mut state = State::default();
-	state.channel = params.id();
-	state.version = 1;
-	state.allocation = vec![10.into()];
-	state.finalized = true;
-
-	let enc = Encode!(&"invalid state").unwrap();
-	let mut signed = FullySignedState::default();
-	signed.state = state;
-	signed.sigs = vec![L2Signature(sk.sign(&enc, &pk.0).to_bytes().into())];
-
-	assert_eq!(canister.conclude(params, signed, 0), Err(Error::Authentication));
+	let mut s = test::Setup::new(0xeb, true);
+	let sstate = s.sign_invalid();
+	assert_eq!(s.canister.conclude(s.params, sstate, 0), Err(Error::Authentication));
 }
 
 #[test]
 /// Tests that invalid sized allocations are rejected.
 fn test_conclude_invalid_allocation() {
-	let (mut canister, sk, pk) = test::setup();
-	let mut params = Params::default();
-	params.participants = vec![pk.clone()];
-	let mut state = State::default();
-	state.channel = params.id();
-	state.version = 1;
-	state.finalized = true;
-
-	let enc = Encode!(&state).unwrap();
-	let mut signed = FullySignedState::default();
-	signed.state = state;
-	signed.sigs = vec![L2Signature(sk.sign(&enc, &pk.0).to_bytes().into())];
-
-	assert_eq!(canister.conclude(params, signed, 0), Err(Error::InvalidInput));
+	let mut s = test::Setup::new(0xfa, true);
+	s.state.allocation.push(5.into());
+	let signed = s.sign();
+	assert_eq!(s.canister.conclude(s.params, signed, 0), Err(Error::InvalidInput));
 }
 
 #[test]
 fn test_dispute_sig() {
-	let (mut canister, alice_esk, alice) = test::setup();
-
-	let hash = Hash::digest(&[123]);
-	let state = State {
-		channel: hash.clone(),
-		version: 564,
-		allocation: vec![10.into()],
-		finalized: false,
-	};
-	let enc = Encode!(&state).unwrap();
-	let alice_sig = L2Signature(alice_esk.sign(&enc, &alice.0).to_bytes().into());
-
-	let sstate = FullySignedState {
-		state: state,
-		sigs: vec![alice_sig],
-	};
-	let params = Params {
-		nonce: hash,
-		participants: vec![alice],
-		challenge_duration: 123,
-	};
-	assert_eq!(canister.dispute(params, sstate), Ok(()));
+	let mut s = test::Setup::new(0xd0, false);
+	let sstate = s.sign();
+	assert_eq!(s.canister.dispute(s.params, sstate), Ok(()));
 }
