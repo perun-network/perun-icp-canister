@@ -26,15 +26,17 @@ pub use ic_cdk::export::candid::{
 		Type,
 	},
 };
-use ed25519_dalek::{PublicKey, Signature};
+use digest::{FixedOutputDirty, Update};
+use ed25519_dalek::{PublicKey, Signature, Sha512 as Hasher};
 use serde::de::{Deserializer, Visitor, Error};
 
 
 // Type definitions start here.
 
 
+#[derive(PartialEq, Eq, Default, Clone)]
 /// A hash as used by the signature scheme.
-pub type Hash = Vec<u8>;
+pub struct Hash(pub digest::Output<Hasher>);
 
 #[derive(PartialEq, Default, Clone, Eq)]
 /// A layer-2 account identifier.
@@ -129,6 +131,44 @@ pub struct Funding {
 	pub channel: ChannelId,
 	/// The funds' owner's layer-2 identity within the channel.
 	pub participant: L2Account,
+}
+
+// Hash
+
+impl<'de> Deserialize<'de> for Hash {
+	fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+	where D: Deserializer<'de> {
+		let bytes: &[u8] = &deserializer.deserialize_bytes(BlobDecoderVisitor::default())?;
+		if bytes.len() != <Hasher as digest::Digest>::output_size() {
+			Err(D::Error::invalid_length(bytes.len(), &"hash digest"))?;
+		}
+		Ok(Hash(*digest::Output::<Hasher>::from_slice(bytes)))
+	}
+}
+
+impl CandidType for Hash {
+	fn _ty() -> Type { Type::Vec(Box::new(Type::Nat8)) }
+
+	fn idl_serialize<S>(&self, serializer: S) -> core::result::Result<(), S::Error>
+	where S: Serializer {
+		serializer.serialize_blob(&self.0.as_slice())
+	}
+}
+
+impl std::hash::Hash for Hash {
+	fn hash<H: std::hash::Hasher>(self: &Self, state: &mut H) {
+		self.0.as_slice().hash(state);
+	}
+}
+
+impl Hash {
+	pub fn digest(msg: &[u8]) -> Self {
+		let mut h = Hasher::default();
+		h.update(msg);
+		let mut out: Hash = Hash::default();
+		h.finalize_into_dirty(&mut out.0);
+		return out
+	}
 }
 
 // L2Account
