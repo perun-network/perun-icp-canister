@@ -33,6 +33,8 @@ pub struct CanisterState {
 	/// Tracks all deposits for unregistered channels. For registered channels,
 	/// tracks withdrawable balances instead.
 	deposits: HashMap<Funding, Amount>,
+	/// Tracks the deposits per channel.
+	funds: HashMap<ChannelId, Amount>,
 	/// Tracks all registered channels.
 	channels: HashMap<ChannelId, RegisteredState>,
 }
@@ -75,6 +77,9 @@ fn query_deposit(funding: Funding) -> Option<Amount> {
 
 impl CanisterState {
 	pub fn deposit(&mut self, funding: Funding, amount: Amount) -> Result<()> {
+		*self.funds
+			.entry(funding.channel.clone())
+			.or_insert(Default::default()) += amount.clone();
 		*self.deposits
 			.entry(funding)
 			.or_insert(Default::default()) += amount;
@@ -95,9 +100,12 @@ impl CanisterState {
 			}
 		}
 
+		let funds = self.funds.get(&state.state.channel).ok_or(
+			Error::InsufficientFunding)?;
+
 		self.channels.insert(
 			state.state.channel.clone(),
-			RegisteredState::conclude(state, &params)?);
+			RegisteredState::conclude(state, &params, funds)?);
 		Ok(())
 	}
 
@@ -113,7 +121,7 @@ impl CanisterState {
 #[test]
 /// Tests that deposits are added 
 fn test_deposit() {
-	let mut s = test::Setup::new(0xd4, false);
+	let mut s = test::Setup::new(0xd4, false, false);
 
 	let funding = Funding::new(s.params.id(), s.parts[0].clone());
 	let funding2 = Funding::new(s.params.id(), s.parts[1].clone());
@@ -137,7 +145,7 @@ fn test_deposit() {
 #[test]
 /// Tests the happy conclude path.
 fn test_conclude() {
-	let mut s = test::Setup::new(0xb2, true);
+	let mut s = test::Setup::new(0xb2, true, true);
 	let sstate = s.sign();
 	assert_eq!(s.canister.conclude(s.params, sstate, 0), Ok(()));
 }
@@ -145,7 +153,7 @@ fn test_conclude() {
 #[test]
 /// Tests that nonfinal channels cannot be concluded.
 fn test_conclude_nonfinal() {
-	let mut s = test::Setup::new(0x1b, false);
+	let mut s = test::Setup::new(0x1b, false, true);
 	let sstate = s.sign();
 	assert_eq!(s.canister.conclude(s.params, sstate, 0), Err(Error::NotFinalized));
 }
@@ -153,7 +161,7 @@ fn test_conclude_nonfinal() {
 #[test]
 /// Tests that params match the state.
 fn test_conclude_invalid_params() {
-	let mut s = test::Setup::new(0x23, true);
+	let mut s = test::Setup::new(0x23, true, true);
 	let sstate = s.sign();
 	s.params.challenge_duration += 1;
 	assert_eq!(s.canister.conclude(s.params, sstate, 0), Err(Error::InvalidInput));
@@ -162,15 +170,24 @@ fn test_conclude_invalid_params() {
 #[test]
 /// Tests that only signed channels can be concluded.
 fn test_conclude_not_signed() {
-	let mut s = test::Setup::new(0xeb, true);
+	let mut s = test::Setup::new(0xeb, true, true);
 	let sstate = s.sign_invalid();
 	assert_eq!(s.canister.conclude(s.params, sstate, 0), Err(Error::Authentication));
 }
 
 #[test]
+/// Tests that underfunded channels cannot be concluded.
+fn test_conclude_insufficient_funds() {
+	let mut s = test::Setup::new(0xeb, true, true);
+	s.state.allocation[0] += 1000;
+	let sstate = s.sign();
+	assert_eq!(s.canister.conclude(s.params, sstate, 0), Err(Error::InsufficientFunding));
+}
+
+#[test]
 /// Tests that invalid sized allocations are rejected.
 fn test_conclude_invalid_allocation() {
-	let mut s = test::Setup::new(0xfa, true);
+	let mut s = test::Setup::new(0xfa, true, true);
 	s.state.allocation.push(5.into());
 	let signed = s.sign();
 	assert_eq!(s.canister.conclude(s.params, signed, 0), Err(Error::InvalidInput));
@@ -178,7 +195,7 @@ fn test_conclude_invalid_allocation() {
 
 #[test]
 fn test_dispute_sig() {
-	let mut s = test::Setup::new(0xd0, false);
+	let mut s = test::Setup::new(0xd0, false, true);
 	let sstate = s.sign();
 	assert_eq!(s.canister.dispute(s.params, sstate), Ok(()));
 }

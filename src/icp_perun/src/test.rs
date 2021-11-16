@@ -35,7 +35,7 @@ pub fn keys(rand: u8, id: u8) -> (ExpandedSecretKey, L2Account) {
 }
 
 impl Setup {
-	pub fn new(rand: u8, finalized: bool) -> Self {
+	pub fn new(rand: u8, finalized: bool, funded: bool) -> Self {
 		let mut ret = Self::default();
 		let key0 = keys(rand, 0);
 		let key1 = keys(rand, 1);
@@ -52,6 +52,14 @@ impl Setup {
 			ret.params.nonce.0[1].into(),
 		];
 		ret.state.finalized = finalized;
+
+		if funded {
+			for (i, pk) in ret.parts.iter().enumerate() {
+				ret.canister.deposit(
+					Funding::new(ret.state.channel.clone(), pk.clone()),
+					ret.state.allocation[i].clone()).unwrap();
+			}
+		}
 
 		return ret
 	}

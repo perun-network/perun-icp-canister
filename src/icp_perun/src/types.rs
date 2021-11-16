@@ -230,6 +230,14 @@ impl State {
 		let enc = Encode!(self).expect("encoding state");
 		pk.0.verify_strict(&enc, &sig.0).ok().ok_or(CError::Authentication)
 	}
+
+	pub fn funds(&self) -> Amount {
+		let mut funds = Amount::default();
+		for amount in self.allocation.iter() {
+			funds += amount.clone();
+		}
+		return funds;
+	}
 }
 
 // Params
@@ -247,7 +255,7 @@ impl Params {
 // FullySignedState
 
 impl FullySignedState {
-	pub fn validate(&self, params: &Params) -> CanisterResult<()> {
+	pub fn validate(&self, params: &Params, funds: &Amount) -> CanisterResult<()> {
 		if self.state.channel != params.id() {
 			Err(CError::InvalidInput)?;
 		}
@@ -260,30 +268,34 @@ impl FullySignedState {
 		for (i, pk) in params.participants.iter().enumerate() {
 			self.state.validate_sig(&self.sigs[i], &pk)?;
 		}
+		if funds < &self.state.funds() {
+			Err(CError::InsufficientFunding)?;
+		}
+
 		Ok(())
 	}
 
-	pub fn validate_final(&self, params: &Params) -> CanisterResult<()> {
+	pub fn validate_final(&self, params: &Params, funds: &Amount) -> CanisterResult<()> {
 		if !self.state.finalized {
 			Err(CError::NotFinalized)?;
 		}
-		self.validate(params)
+		self.validate(params, funds)
 	}
 }
 
 // RegisteredState
 
 impl RegisteredState {
-	pub fn conclude(state: FullySignedState, params: &Params) -> CanisterResult<Self> {
-		state.validate_final(params)?;
+	pub fn conclude(state: FullySignedState, params: &Params, funds: &Amount) -> CanisterResult<Self> {
+		state.validate_final(params, funds)?;
 		Ok(Self {
 			state: state.state,
 			timeout: Default::default(),
 		})
 	}
 
-	pub fn dispute(state: FullySignedState, params: &Params, now: Timestamp) -> CanisterResult<Self> {
-		state.validate(params)?;
+	pub fn dispute(state: FullySignedState, params: &Params, funds: &Amount, now: Timestamp) -> CanisterResult<Self> {
+		state.validate(params, funds)?;
 		Ok(Self{
 			state: state.state,
 			timeout: now + params.challenge_duration,
