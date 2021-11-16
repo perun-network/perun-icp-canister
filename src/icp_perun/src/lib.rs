@@ -176,6 +176,15 @@ fn test_conclude_not_signed() {
 }
 
 #[test]
+/// Tests that underfunded channels cannot be concluded.
+fn test_conclude_insufficient_funds() {
+	let mut s = test::Setup::new(0xeb, true, true);
+	s.state.allocation[0] += 1000;
+	let sstate = s.sign();
+	assert_eq!(s.canister.conclude(s.params, sstate, 0), Err(Error::InsufficientFunding));
+}
+
+#[test]
 /// Tests that invalid sized allocations are rejected.
 fn test_conclude_invalid_allocation() {
 	let mut s = test::Setup::new(0xfa, true, true);
