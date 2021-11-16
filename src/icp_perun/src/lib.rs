@@ -33,6 +33,8 @@ pub struct CanisterState {
 	/// Tracks all deposits for unregistered channels. For registered channels,
 	/// tracks withdrawable balances instead.
 	deposits: HashMap<Funding, Amount>,
+	/// Tracks the deposits per channel.
+	funds: HashMap<ChannelId, Amount>,
 	/// Tracks all registered channels.
 	channels: HashMap<ChannelId, RegisteredState>,
 }
@@ -75,6 +77,9 @@ fn query_deposit(funding: Funding) -> Option<Amount> {
 
 impl CanisterState {
 	pub fn deposit(&mut self, funding: Funding, amount: Amount) -> Result<()> {
+		*self.funds
+			.entry(funding.channel.clone())
+			.or_insert(Default::default()) += amount.clone();
 		*self.deposits
 			.entry(funding)
 			.or_insert(Default::default()) += amount;
@@ -95,9 +100,12 @@ impl CanisterState {
 			}
 		}
 
+		let funds = self.funds.get(&state.state.channel).ok_or(
+			Error::InsufficientFunding)?;
+
 		self.channels.insert(
 			state.state.channel.clone(),
-			RegisteredState::conclude(state, &params)?);
+			RegisteredState::conclude(state, &params, funds)?);
 		Ok(())
 	}
 
