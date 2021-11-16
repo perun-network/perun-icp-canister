@@ -37,7 +37,9 @@ pub enum Error {
 	/// A channel has been concluded or disputed after conclusion.
 	AlreadyConcluded,
 	/// In some way, the input was invalid.
-	InvalidInput
+	InvalidInput,
+	/// When trying get more funds out of a channel than have been put into it.
+	InsufficientFunding,
 }
 
 /// Canister operation result type.

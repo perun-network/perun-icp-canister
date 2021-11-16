@@ -230,6 +230,14 @@ impl State {
 		let enc = Encode!(self).expect("encoding state");
 		pk.0.verify_strict(&enc, &sig.0).ok().ok_or(CError::Authentication)
 	}
+
+	pub fn funds(&self) -> Amount {
+		let mut funds = Amount::default();
+		for amount in self.allocation {
+			funds += amount;
+		}
+		return funds;
+	}
 }
 
 // Params
@@ -247,7 +255,7 @@ impl Params {
 // FullySignedState
 
 impl FullySignedState {
-	pub fn validate(&self, params: &Params) -> CanisterResult<()> {
+	pub fn validate(&self, params: &Params, funds: &Amount) -> CanisterResult<()> {
 		if self.state.channel != params.id() {
 			Err(CError::InvalidInput)?;
 		}
@@ -260,6 +268,10 @@ impl FullySignedState {
 		for (i, pk) in params.participants.iter().enumerate() {
 			self.state.validate_sig(&self.sigs[i], &pk)?;
 		}
+		if funds < self.state.funds() {
+			Err(CError::InsufficientFunding)?;
+		}
+
 		Ok(())
 	}
 
