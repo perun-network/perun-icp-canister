@@ -224,3 +224,17 @@ fn test_dispute_final() {
 	assert_eq!(s.canister.dispute(s.params, sstate, time), Ok(()));
 	assert!(s.canister.channels.get(&channel).unwrap().settled(time));
 }
+
+#[test]
+fn test_dispute_valid_refutation() {
+	let time = 0;
+	let mut s = test::Setup::new(0xbf, false, true);
+	let channel = s.params.id();
+	let mut sstate = s.sign();
+	assert_eq!(s.canister.dispute(s.params.clone(), sstate, time), Ok(()));
+	s.state.version += 1;
+	s.state.finalized = true;
+	sstate = s.sign();
+	assert_eq!(s.canister.dispute(s.params, sstate, time), Ok(()));
+	assert!(s.canister.channels.get(&channel).unwrap().settled(time));
+}
