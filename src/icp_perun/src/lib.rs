@@ -53,7 +53,7 @@ fn deposit(funding: Funding, amount: Amount) -> Option<Error> {
 /// duration to register a more recent channel state if exists. After the
 /// challenge duration elapsed, the channel will be marked as settled.
 fn dispute(params: Params, state: FullySignedState) -> Option<Error> {
-	STATE.with(|s| s.borrow_mut().dispute(params, state)).err()
+	STATE.with(|s| s.borrow_mut().dispute(params, state, blocktime())).err()
 }
 
 #[ic_cdk_macros::update]
@@ -109,10 +109,22 @@ impl CanisterState {
 		Ok(())
 	}
 
-	pub fn dispute(&mut self, params: Params, state: FullySignedState) -> Result<()> {
-		for (i, pk) in params.participants.iter().enumerate() {
-			state.state.validate_sig(&state.sigs[i], &pk)?;
+	pub fn dispute(&mut self, params: Params, state: FullySignedState, now: Timestamp) -> Result<()> {
+		if let Some(old_state) = self.channels.get(&state.state.channel) {
+			if old_state.settled(now) {
+				Err(Error::AlreadyConcluded)?;
+			}
+			if old_state.state.version >= state.state.version {
+				Err(Error::OutdatedState)?;
+			}
 		}
+
+		let funds = self.funds.get(&state.state.channel).ok_or(
+			Error::InsufficientFunding)?;
+
+		self.channels.insert(
+			state.state.channel.clone(),
+			RegisteredState::dispute(state, &params, funds, now)?);
 		Ok(())
 	}
 }
@@ -194,8 +206,67 @@ fn test_conclude_invalid_allocation() {
 }
 
 #[test]
-fn test_dispute_sig() {
+fn test_dispute_nonfinal() {
 	let mut s = test::Setup::new(0xd0, false, true);
+	let now = 0;
+	let channel = s.params.id();
 	let sstate = s.sign();
-	assert_eq!(s.canister.dispute(s.params, sstate), Ok(()));
+	assert_eq!(s.canister.dispute(s.params, sstate, now), Ok(()));
+	assert!(!s.canister.channels.get(&channel).unwrap().settled(now));
+}
+
+#[test]
+fn test_dispute_final() {
+	let time = 0;
+	let mut s = test::Setup::new(0xd0, true, true);
+	let channel = s.params.id();
+	let sstate = s.sign();
+	assert_eq!(s.canister.dispute(s.params, sstate, time), Ok(()));
+	assert!(s.canister.channels.get(&channel).unwrap().settled(time));
+}
+
+#[test]
+fn test_dispute_valid_refutation() {
+	let time = 0;
+	let mut s = test::Setup::new(0xbf, false, true);
+	let channel = s.params.id();
+	let mut sstate = s.sign();
+	assert_eq!(s.canister.dispute(s.params.clone(), sstate, time), Ok(()));
+	s.state.version += 1;
+	s.state.finalized = true;
+	sstate = s.sign();
+	assert_eq!(s.canister.dispute(s.params, sstate, time), Ok(()));
+	assert!(s.canister.channels.get(&channel).unwrap().settled(time));
+}
+
+#[test]
+fn test_dispute_outdated_refutation() {
+	let time = 0;
+	let version = 10;
+	let mut s = test::Setup::new(0x21, false, true);
+	let channel = s.params.id();
+	s.state.version = version;
+	let mut sstate = s.sign();
+	assert_eq!(s.canister.dispute(s.params.clone(), sstate, time), Ok(()));
+	s.state.version -= 1;
+	sstate = s.sign();
+	assert_eq!(s.canister.dispute(s.params, sstate, time), Err(Error::OutdatedState));
+	assert!(!s.canister.channels.get(&channel).unwrap().settled(time));
+	assert_eq!(s.canister.channels.get(&channel).unwrap().state.version, version);
+}
+
+#[test]
+fn test_dispute_settled_refutation() {
+	let time = 0;
+	let version = 10;
+	let mut s = test::Setup::new(0x21, true, true);
+	let channel = s.params.id();
+	s.state.version = version;
+	let mut sstate = s.sign();
+	assert_eq!(s.canister.conclude(s.params.clone(), sstate, time), Ok(()));
+	s.state.version += 1;
+	sstate = s.sign();
+	assert_eq!(s.canister.dispute(s.params, sstate, time), Err(Error::AlreadyConcluded));
+	assert!(s.canister.channels.get(&channel).unwrap().settled(time));
+	assert_eq!(s.canister.channels.get(&channel).unwrap().state.version, version);
 }
