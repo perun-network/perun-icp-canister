@@ -44,6 +44,7 @@ impl Setup {
 
 		ret.params.nonce = Hash::digest(&[rand, 0]);
 		ret.params.participants = ret.parts.clone();
+		ret.params.challenge_duration = 1;
 
 		ret.state.channel = ret.params.id();
 		ret.state.version = (rand as u64) * 123;
