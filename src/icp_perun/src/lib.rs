@@ -214,3 +214,13 @@ fn test_dispute_nonfinal() {
 	assert_eq!(s.canister.dispute(s.params, sstate, now), Ok(()));
 	assert!(!s.canister.channels.get(&channel).unwrap().settled(now));
 }
+
+#[test]
+fn test_dispute_final() {
+	let time = 0;
+	let mut s = test::Setup::new(0xd0, true, true);
+	let channel = s.params.id();
+	let sstate = s.sign();
+	assert_eq!(s.canister.dispute(s.params, sstate, time), Ok(()));
+	assert!(s.canister.channels.get(&channel).unwrap().settled(time));
+}
