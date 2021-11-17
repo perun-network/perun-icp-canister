@@ -61,7 +61,7 @@ pub type Nonce = Hash;
 /// Channel state version identifier.
 pub type Version = u64;
 
-#[derive(Deserialize, CandidType, Default)]
+#[derive(Deserialize, CandidType, Default, Clone)]
 /// The immutable parameters and state of a Perun channel.
 pub struct Params {
 	/// The channel's unique nonce, to protect against replay attacks.
