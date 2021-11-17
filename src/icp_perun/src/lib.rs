@@ -254,3 +254,19 @@ fn test_dispute_outdated_refutation() {
 	assert!(!s.canister.channels.get(&channel).unwrap().settled(time));
 	assert_eq!(s.canister.channels.get(&channel).unwrap().state.version, version);
 }
+
+#[test]
+fn test_dispute_settled_refutation() {
+	let time = 0;
+	let version = 10;
+	let mut s = test::Setup::new(0x21, true, true);
+	let channel = s.params.id();
+	s.state.version = version;
+	let mut sstate = s.sign();
+	assert_eq!(s.canister.conclude(s.params.clone(), sstate, time), Ok(()));
+	s.state.version += 1;
+	sstate = s.sign();
+	assert_eq!(s.canister.dispute(s.params, sstate, time), Err(Error::AlreadyConcluded));
+	assert!(s.canister.channels.get(&channel).unwrap().settled(time));
+	assert_eq!(s.canister.channels.get(&channel).unwrap().state.version, version);
+}
