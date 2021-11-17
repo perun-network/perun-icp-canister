@@ -206,8 +206,11 @@ fn test_conclude_invalid_allocation() {
 }
 
 #[test]
-fn test_dispute_sig() {
+fn test_dispute_nonfinal() {
 	let mut s = test::Setup::new(0xd0, false, true);
+	let now = 0;
+	let channel = s.params.id();
 	let sstate = s.sign();
-	assert_eq!(s.canister.dispute(s.params, sstate, 0), Ok(()));
+	assert_eq!(s.canister.dispute(s.params, sstate, now), Ok(()));
+	assert!(!s.canister.channels.get(&channel).unwrap().settled(now));
 }
