@@ -32,9 +32,7 @@ thread_local! {
 pub struct CanisterState {
 	/// Tracks all deposits for unregistered channels. For registered channels,
 	/// tracks withdrawable balances instead.
-	deposits: HashMap<Funding, Amount>,
-	/// Tracks the deposits per channel.
-	funds: HashMap<ChannelId, Amount>,
+	holdings: HashMap<Funding, Amount>,
 	/// Tracks all registered channels.
 	channels: HashMap<ChannelId, RegisteredState>,
 }
@@ -77,20 +75,28 @@ fn query_deposit(funding: Funding) -> Option<Amount> {
 
 impl CanisterState {
 	pub fn deposit(&mut self, funding: Funding, amount: Amount) -> Result<()> {
-		*self.funds
-			.entry(funding.channel.clone())
-			.or_insert(Default::default()) += amount.clone();
-		*self.deposits
+		*self.holdings
 			.entry(funding)
 			.or_insert(Default::default()) += amount;
 		Ok(())
 	}
 
 	pub fn query_deposit(&self, funding: Funding) -> Option<Amount> {
-		match self.deposits.get(&funding) {
+		match self.holdings.get(&funding) {
 			None => None,
 			Some(a) => Some(a.clone()),
 		}
+	}
+
+	/// Calculates the total funds held in a channel. If the channel is unknown
+	/// and there are no deposited funds for the channel, returns 0.
+	pub fn channel_funds(&self, channel: &ChannelId, params: &Params) -> Amount {
+		let mut acc = Amount::default();
+		for pk in params.participants.iter() {
+			let funding = Funding::new(channel.clone(), pk.clone());
+			acc += self.holdings.get(&funding).unwrap_or(&Amount::default()).clone();
+		}
+		return acc;
 	}
 
 	pub fn conclude(&mut self, params: Params, state: FullySignedState, now: Timestamp) -> Result<()> {
@@ -100,8 +106,8 @@ impl CanisterState {
 			}
 		}
 
-		let funds = self.funds.get(&state.state.channel).ok_or(
-			Error::InsufficientFunding)?;
+		let funds = &self.channel_funds(&state.state.channel, &params);
+
 
 		self.channels.insert(
 			state.state.channel.clone(),
@@ -119,8 +125,8 @@ impl CanisterState {
 			}
 		}
 
-		let funds = self.funds.get(&state.state.channel).ok_or(
-			Error::InsufficientFunding)?;
+		let funds = &self.channel_funds(&state.state.channel, &params);
+
 
 		self.channels.insert(
 			state.state.channel.clone(),
