@@ -88,6 +88,20 @@ impl CanisterState {
 		}
 	}
 
+	/// Updates the holdings associated with a channel to the outcome of the
+	/// supplied state, then registers the state.
+	pub fn realise_outcome(&mut self, params: &Params, state: RegisteredState) {
+		for (i, outcome) in state.state.allocation.iter().enumerate() {
+			self.holdings.insert(
+				Funding::new(
+					state.state.channel.clone(),
+					params.participants[i].clone()),
+				outcome.clone());
+		}
+
+		self.channels.insert(state.state.channel.clone(), state);
+	}
+
 	/// Calculates the total funds held in a channel. If the channel is unknown
 	/// and there are no deposited funds for the channel, returns 0.
 	pub fn channel_funds(&self, channel: &ChannelId, params: &Params) -> Amount {
@@ -108,10 +122,10 @@ impl CanisterState {
 
 		let funds = &self.channel_funds(&state.state.channel, &params);
 
-
-		self.channels.insert(
-			state.state.channel.clone(),
+		self.realise_outcome(
+			&params,
 			RegisteredState::conclude(state, &params, funds)?);
+
 		Ok(())
 	}
 
@@ -127,10 +141,10 @@ impl CanisterState {
 
 		let funds = &self.channel_funds(&state.state.channel, &params);
 
-
-		self.channels.insert(
-			state.state.channel.clone(),
+		self.realise_outcome(
+			&params,
 			RegisteredState::dispute(state, &params, funds, now)?);
+
 		Ok(())
 	}
 }
