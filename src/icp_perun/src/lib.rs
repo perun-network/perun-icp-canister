@@ -297,3 +297,9 @@ fn test_holding_tracking_deposit() {
 	let sum = s.state.allocation[0].clone() + s.state.allocation[1].clone();
 	assert_eq!(s.canister.channel_funds(&s.state.channel, &s.params), sum);
 }
+
+#[test]
+fn test_holding_tracking_none() {
+	let s = test::Setup::new(0xd9, true, false);
+	assert_eq!(s.canister.channel_funds(&s.state.channel, &s.params), 0);
+}
