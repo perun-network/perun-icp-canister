@@ -38,7 +38,7 @@ pub enum Error {
 	InvalidInput,
 	/// When trying get more funds out of a channel than have been put into it.
 	InsufficientFunding,
-	/// When a state that is registered for disute is older than the previously
+	/// When a state that is registered for dispute is older than the previously
 	/// registered state.
 	OutdatedState,
 }
