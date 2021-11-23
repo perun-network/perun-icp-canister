@@ -2,7 +2,7 @@
 name = "icp-perun"
 version = "0.1.0"
 authors = ["PolyCrypt GmbH <info@polycry.pt>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 homepage = "https://polycry.pt/"
 keywords = ["blockchain", "channel", "perun"]
@@ -11,6 +11,7 @@ description = "Dfinity Canister for Perun State Channels"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
+# https://github.com/rust-lang/cargo/issues/4881
 crate-type = ["cdylib"]
 name = "icp_perun"
 
@@ -18,9 +19,21 @@ name = "icp_perun"
 ic-cdk = "0.3"
 ic-cdk-macros = "0.3"
 candid = "0.7.8"
-ed25519 = "1.2.0"
 ed25519-dalek = "1.0.1"
 digest = "0.9.0"
+hex = "0.4.3"
+serde = { version = "1.0.130", features = ["derive"] }
+serde_bytes = "0.11"
 
-serde = "1.0.130"
-num-bigint = "0.4.3"
+[dev-dependencies]
+ic-agent = "0.10.0"
+# Needed for ic_agent identity creation.
+ring = { version = "0.16.11", features = ["std"] }
+# Needed for ic_agent event waiting.
+garcon = { version = "0.2", features = ["async"] }
+# Needed for ic_agent async functions.
+tokio = { version = "1.8.1", features = ["full"] }
+# logger interface
+log = "0.4.14"
+# logger impl
+pretty_env_logger = "0.4.0"
