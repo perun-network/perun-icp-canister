@@ -26,11 +26,11 @@ use serde_bytes::ByteBuf;
 
 // Type definitions start here.
 
-#[derive(PartialEq, Eq, Default, Clone)]
+#[derive(PartialEq, Debug, Eq, Default, Clone)]
 /// A hash as used by the signature scheme.
 pub struct Hash(pub digest::Output<Hasher>);
 
-#[derive(PartialEq, Default, Clone, Eq)]
+#[derive(PartialEq, Debug, Default, Clone, Eq)]
 /// A layer-2 account identifier.
 pub struct L2Account(pub PublicKey);
 
@@ -152,6 +152,14 @@ impl CandidType for Hash {
 		S: Serializer,
 	{
 		serializer.serialize_blob(&*self.0)
+	}
+}
+
+impl std::fmt::Display for Hash {
+	/// Formats the first 4 byte of a hash as lower case hex with 0x prefix.
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		let data = &self.0[..4];
+		write!(f, "0x{}…", hex::encode(data))
 	}
 }
 
