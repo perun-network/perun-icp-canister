@@ -29,5 +29,6 @@ type FullySignedState = record {
 
 service : {
 	"deposit": (Funding, Amount) -> (opt Error);
+	"query_deposit": (Funding) -> (opt Amount) query;
 	"conclude": (Params, FullySignedState) -> (opt Error);
 }
