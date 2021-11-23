@@ -12,10 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use ed25519_dalek::{SecretKey, ExpandedSecretKey};
 use crate::types::*;
 use crate::CanisterState;
 use candid::Encode;
+use ed25519_dalek::{ExpandedSecretKey, SecretKey};
 
 #[derive(Default)]
 pub struct Setup {
@@ -31,7 +31,7 @@ pub fn keys(rand: u8, id: u8) -> (ExpandedSecretKey, L2Account) {
 	let sk = SecretKey::from_bytes(&hash.as_slice()[..32]).unwrap();
 	let esk = ExpandedSecretKey::from(&sk);
 	let pk = L2Account((&sk).into());
-	return (esk, pk)
+	return (esk, pk);
 }
 
 impl Setup {
@@ -48,21 +48,21 @@ impl Setup {
 
 		ret.state.channel = ret.params.id();
 		ret.state.version = (rand as u64) * 123;
-		ret.state.allocation = vec![
-			ret.params.nonce.0[0].into(),
-			ret.params.nonce.0[1].into(),
-		];
+		ret.state.allocation = vec![ret.params.nonce.0[0].into(), ret.params.nonce.0[1].into()];
 		ret.state.finalized = finalized;
 
 		if funded {
 			for (i, pk) in ret.parts.iter().enumerate() {
-				ret.canister.deposit(
-					Funding::new(ret.state.channel.clone(), pk.clone()),
-					ret.state.allocation[i].clone()).unwrap();
+				ret.canister
+					.deposit(
+						Funding::new(ret.state.channel.clone(), pk.clone()),
+						ret.state.allocation[i].clone(),
+					)
+					.unwrap();
 			}
 		}
 
-		return ret
+		return ret;
 	}
 
 	pub fn sign(&self) -> FullySignedState {
@@ -72,15 +72,15 @@ impl Setup {
 		self.sign_encoding(&Encode!(&"invalid state").unwrap())
 	}
 
-
-
 	fn sign_encoding(&self, enc: &[u8]) -> FullySignedState {
 		let mut state = FullySignedState::default();
 		state.state = self.state.clone();
 		for (i, key) in self.parts.iter().enumerate() {
-			state.sigs.push(L2Signature(self.secrets[i].sign(&enc, &key.0).to_bytes().into()))
+			state.sigs.push(L2Signature(
+				self.secrets[i].sign(&enc, &key.0).to_bytes().into(),
+			))
 		}
 
-		return state
+		return state;
 	}
 }

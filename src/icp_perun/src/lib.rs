@@ -12,15 +12,15 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::HashMap;
 use std::cell::RefCell;
+use std::collections::HashMap;
 pub mod error;
-pub mod types;
 pub mod test;
+pub mod types;
 
-use types::*;
 use error::*;
 use ic_cdk::api::time as blocktime;
+use types::*;
 
 thread_local! {
 	static STATE: RefCell<CanisterState> = Default::default();
@@ -42,7 +42,9 @@ pub struct CanisterState {
 /// Please do NOT over-fund or fund channels that are already fully funded, as
 /// this can lead to a permanent LOSS OF FUNDS.
 fn deposit(funding: Funding, amount: Amount) -> Option<Error> {
-	STATE.with(|s| s.borrow_mut().deposit(funding, amount)).err()
+	STATE
+		.with(|s| s.borrow_mut().deposit(funding, amount))
+		.err()
 }
 
 #[ic_cdk_macros::update]
@@ -51,14 +53,18 @@ fn deposit(funding: Funding, amount: Amount) -> Option<Error> {
 /// duration to register a more recent channel state if exists. After the
 /// challenge duration elapsed, the channel will be marked as settled.
 fn dispute(params: Params, state: FullySignedState) -> Option<Error> {
-	STATE.with(|s| s.borrow_mut().dispute(params, state, blocktime())).err()
+	STATE
+		.with(|s| s.borrow_mut().dispute(params, state, blocktime()))
+		.err()
 }
 
 #[ic_cdk_macros::update]
 /// Settles a finalized channel and makes its final funds distribution
 /// withdrawable.
 fn conclude(params: Params, state: FullySignedState) -> Option<Error> {
-	STATE.with(|s| s.borrow_mut().conclude(params, state, blocktime())).err()
+	STATE
+		.with(|s| s.borrow_mut().conclude(params, state, blocktime()))
+		.err()
 }
 
 #[ic_cdk_macros::update]
@@ -75,9 +81,7 @@ fn query_deposit(funding: Funding) -> Option<Amount> {
 
 impl CanisterState {
 	pub fn deposit(&mut self, funding: Funding, amount: Amount) -> Result<()> {
-		*self.holdings
-			.entry(funding)
-			.or_insert(Default::default()) += amount;
+		*self.holdings.entry(funding).or_insert(Default::default()) += amount;
 		Ok(())
 	}
 
@@ -93,10 +97,9 @@ impl CanisterState {
 	pub fn realise_outcome(&mut self, params: &Params, state: RegisteredState) {
 		for (i, outcome) in state.state.allocation.iter().enumerate() {
 			self.holdings.insert(
-				Funding::new(
-					state.state.channel.clone(),
-					params.participants[i].clone()),
-				outcome.clone());
+				Funding::new(state.state.channel.clone(), params.participants[i].clone()),
+				outcome.clone(),
+			);
 		}
 
 		self.channels.insert(state.state.channel.clone(), state);
@@ -108,12 +111,21 @@ impl CanisterState {
 		let mut acc = Amount::default();
 		for pk in params.participants.iter() {
 			let funding = Funding::new(channel.clone(), pk.clone());
-			acc += self.holdings.get(&funding).unwrap_or(&Amount::default()).clone();
+			acc += self
+				.holdings
+				.get(&funding)
+				.unwrap_or(&Amount::default())
+				.clone();
 		}
 		return acc;
 	}
 
-	pub fn conclude(&mut self, params: Params, state: FullySignedState, now: Timestamp) -> Result<()> {
+	pub fn conclude(
+		&mut self,
+		params: Params,
+		state: FullySignedState,
+		now: Timestamp,
+	) -> Result<()> {
 		if let Some(old_state) = self.channels.get(&state.state.channel) {
 			if old_state.settled(now) {
 				Err(Error::AlreadyConcluded)?;
@@ -122,14 +134,17 @@ impl CanisterState {
 
 		let funds = &self.channel_funds(&state.state.channel, &params);
 
-		self.realise_outcome(
-			&params,
-			RegisteredState::conclude(state, &params, funds)?);
+		self.realise_outcome(&params, RegisteredState::conclude(state, &params, funds)?);
 
 		Ok(())
 	}
 
-	pub fn dispute(&mut self, params: Params, state: FullySignedState, now: Timestamp) -> Result<()> {
+	pub fn dispute(
+		&mut self,
+		params: Params,
+		state: FullySignedState,
+		now: Timestamp,
+	) -> Result<()> {
 		if let Some(old_state) = self.channels.get(&state.state.channel) {
 			if old_state.settled(now) {
 				Err(Error::AlreadyConcluded)?;
@@ -143,15 +158,15 @@ impl CanisterState {
 
 		self.realise_outcome(
 			&params,
-			RegisteredState::dispute(state, &params, funds, now)?);
+			RegisteredState::dispute(state, &params, funds, now)?,
+		);
 
 		Ok(())
 	}
 }
 
-
 #[test]
-/// Tests that deposits are added 
+/// Tests that deposits are added
 fn test_deposit() {
 	let mut s = test::Setup::new(0xd4, false, false);
 
@@ -187,7 +202,10 @@ fn test_conclude() {
 fn test_conclude_nonfinal() {
 	let mut s = test::Setup::new(0x1b, false, true);
 	let sstate = s.sign();
-	assert_eq!(s.canister.conclude(s.params, sstate, 0), Err(Error::NotFinalized));
+	assert_eq!(
+		s.canister.conclude(s.params, sstate, 0),
+		Err(Error::NotFinalized)
+	);
 }
 
 #[test]
@@ -196,7 +214,10 @@ fn test_conclude_invalid_params() {
 	let mut s = test::Setup::new(0x23, true, true);
 	let sstate = s.sign();
 	s.params.challenge_duration += 1;
-	assert_eq!(s.canister.conclude(s.params, sstate, 0), Err(Error::InvalidInput));
+	assert_eq!(
+		s.canister.conclude(s.params, sstate, 0),
+		Err(Error::InvalidInput)
+	);
 }
 
 #[test]
@@ -204,7 +225,10 @@ fn test_conclude_invalid_params() {
 fn test_conclude_not_signed() {
 	let mut s = test::Setup::new(0xeb, true, true);
 	let sstate = s.sign_invalid();
-	assert_eq!(s.canister.conclude(s.params, sstate, 0), Err(Error::Authentication));
+	assert_eq!(
+		s.canister.conclude(s.params, sstate, 0),
+		Err(Error::Authentication)
+	);
 }
 
 #[test]
@@ -213,7 +237,10 @@ fn test_conclude_insufficient_funds() {
 	let mut s = test::Setup::new(0xeb, true, true);
 	s.state.allocation[0] += 1000;
 	let sstate = s.sign();
-	assert_eq!(s.canister.conclude(s.params, sstate, 0), Err(Error::InsufficientFunding));
+	assert_eq!(
+		s.canister.conclude(s.params, sstate, 0),
+		Err(Error::InsufficientFunding)
+	);
 }
 
 #[test]
@@ -222,7 +249,10 @@ fn test_conclude_invalid_allocation() {
 	let mut s = test::Setup::new(0xfa, true, true);
 	s.state.allocation.push(5.into());
 	let signed = s.sign();
-	assert_eq!(s.canister.conclude(s.params, signed, 0), Err(Error::InvalidInput));
+	assert_eq!(
+		s.canister.conclude(s.params, signed, 0),
+		Err(Error::InvalidInput)
+	);
 }
 
 #[test]
@@ -270,9 +300,15 @@ fn test_dispute_outdated_refutation() {
 	assert_eq!(s.canister.dispute(s.params.clone(), sstate, time), Ok(()));
 	s.state.version -= 1;
 	sstate = s.sign();
-	assert_eq!(s.canister.dispute(s.params, sstate, time), Err(Error::OutdatedState));
+	assert_eq!(
+		s.canister.dispute(s.params, sstate, time),
+		Err(Error::OutdatedState)
+	);
 	assert!(!s.canister.channels.get(&channel).unwrap().settled(time));
-	assert_eq!(s.canister.channels.get(&channel).unwrap().state.version, version);
+	assert_eq!(
+		s.canister.channels.get(&channel).unwrap().state.version,
+		version
+	);
 }
 
 #[test]
@@ -286,9 +322,15 @@ fn test_dispute_settled_refutation() {
 	assert_eq!(s.canister.conclude(s.params.clone(), sstate, time), Ok(()));
 	s.state.version += 1;
 	sstate = s.sign();
-	assert_eq!(s.canister.dispute(s.params, sstate, time), Err(Error::AlreadyConcluded));
+	assert_eq!(
+		s.canister.dispute(s.params, sstate, time),
+		Err(Error::AlreadyConcluded)
+	);
 	assert!(s.canister.channels.get(&channel).unwrap().settled(time));
-	assert_eq!(s.canister.channels.get(&channel).unwrap().state.version, version);
+	assert_eq!(
+		s.canister.channels.get(&channel).unwrap().state.version,
+		version
+	);
 }
 
 #[test]
