@@ -12,9 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use ic_cdk::export::candid::{
-	CandidType,
-};
+use ic_cdk::export::candid::CandidType;
 
 #[macro_export]
 macro_rules! ensure {
