@@ -1,8 +1,8 @@
-type Error = uint8;
-type L2Account = blob;
+type Error = nat8;
+type L2Account = vec nat8;
 type Timestamp = nat64;
 type Duration = nat64;
-type Hash = blob;
+type Hash = vec nat8;
 type Nonce = Hash;
 type ChannelId = Hash;
 type Amount = nat;
@@ -20,12 +20,12 @@ type State = record {
 	version: nat64;
 	allocation: vec Amount;
 	finalized: bool;
-}
+};
 
 type FullySignedState = record {
 	state: State;
 	sigs: vec blob;
-}
+};
 
 service : {
 	"deposit": (Funding, Amount) -> (opt Error);
