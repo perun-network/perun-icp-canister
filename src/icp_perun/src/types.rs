@@ -21,7 +21,8 @@ pub use ic_cdk::export::candid::{
 	types::{Serializer, Type},
 	CandidType, Deserialize, Int, Nat,
 };
-use serde::de::{Deserializer, Error, Visitor};
+use serde::de::{Deserializer, Error};
+use serde_bytes::ByteBuf;
 
 // Type definitions start here.
 
@@ -127,15 +128,17 @@ pub struct Funding {
 // Hash
 
 impl<'de> Deserialize<'de> for Hash {
-	fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
-		let bytes: &[u8] = &deserializer.deserialize_bytes(BlobDecoderVisitor::default())?;
+		let bytes = ByteBuf::deserialize(deserializer)?;
 		if bytes.len() != <Hasher as digest::Digest>::output_size() {
 			Err(D::Error::invalid_length(bytes.len(), &"hash digest"))?;
 		}
-		Ok(Hash(*digest::Output::<Hasher>::from_slice(bytes)))
+		Ok(Hash(*digest::Output::<Hasher>::from_slice(
+			bytes.as_slice(),
+		)))
 	}
 }
 
@@ -144,11 +147,11 @@ impl CandidType for Hash {
 		Type::Vec(Box::new(Type::Nat8))
 	}
 
-	fn idl_serialize<S>(&self, serializer: S) -> core::result::Result<(), S::Error>
+	fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
 	where
 		S: Serializer,
 	{
-		serializer.serialize_blob(&self.0.as_slice())
+		serializer.serialize_blob(&*self.0)
 	}
 }
 
@@ -171,12 +174,12 @@ impl Hash {
 // L2Account
 
 impl<'de> Deserialize<'de> for L2Account {
-	fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
-		let bytes: &[u8] = &deserializer.deserialize_bytes(BlobDecoderVisitor::default())?;
-		let pk = PublicKey::from_bytes(bytes)
+		let bytes = ByteBuf::deserialize(deserializer)?;
+		let pk = PublicKey::from_bytes(bytes.as_slice())
 			.ok()
 			.ok_or(D::Error::invalid_length(bytes.len(), &"public key"))?;
 		Ok(L2Account(pk))
@@ -205,14 +208,13 @@ impl std::hash::Hash for L2Account {
 // L2Signature
 
 impl<'de> Deserialize<'de> for L2Signature {
-	fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
-		let bytes: &[u8] = &deserializer.deserialize_bytes(BlobDecoderVisitor::default())?;
-		let bytes64 =
-			as_bytes64(bytes).ok_or(D::Error::invalid_length(bytes.len(), &"signature"))?;
-		let sig = Signature::new(bytes64);
+		let bytes = ByteBuf::deserialize(deserializer)?;
+		let sig = Signature::try_from(bytes.as_slice())
+			.map_err(|_| D::Error::invalid_length(bytes.len(), &"signature"))?;
 		Ok(L2Signature(sig))
 	}
 }
@@ -333,34 +335,5 @@ impl Funding {
 			channel: channel,
 			participant: participant,
 		}
-	}
-}
-
-// Miscellaneous helpers
-
-/// Needed to decode a blob into a public key's 64 byte
-fn as_bytes64(v: &[u8]) -> Option<[u8; 64]> {
-	if v.len() != 64 {
-		return None;
-	}
-
-	let mut ret: [u8; 64] = [0; 64];
-	let mut i = 0;
-	while i < 64 {
-		ret[i] = v[i];
-		i += 1;
-	}
-
-	Some(ret)
-}
-
-#[derive(Default)]
-/// Used as a helper for decoding a "blob" from candid data.
-struct BlobDecoderVisitor {}
-
-impl<'de> Visitor<'de> for BlobDecoderVisitor {
-	type Value = Vec<u8>;
-	fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		write!(formatter, "expected blob")
 	}
 }
