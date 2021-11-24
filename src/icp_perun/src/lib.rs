@@ -290,3 +290,16 @@ fn test_dispute_settled_refutation() {
 	assert!(s.canister.channels.get(&channel).unwrap().settled(time));
 	assert_eq!(s.canister.channels.get(&channel).unwrap().state.version, version);
 }
+
+#[test]
+fn test_holding_tracking_deposit() {
+	let s = test::Setup::new(0xd9, true, true);
+	let sum = s.state.allocation[0].clone() + s.state.allocation[1].clone();
+	assert_eq!(s.canister.channel_funds(&s.state.channel, &s.params), sum);
+}
+
+#[test]
+fn test_holding_tracking_none() {
+	let s = test::Setup::new(0xd9, true, false);
+	assert_eq!(s.canister.channel_funds(&s.state.channel, &s.params), 0);
+}
