@@ -1,0 +1,61 @@
+name: Rust
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: Swatinem/rust-cache@v1
+        name: Setup Cache
+
+      - uses: actions-rs/toolchain@v1
+        name: Install Rust deps
+        with:
+          default: true
+          toolchain: 1.56.0
+          components: rustfmt
+          target: wasm32-unknown-unknown
+
+      - uses: actions-rs/cargo@v1
+        name: Format
+        with:
+          command: fmt
+          args: --all -- --check
+
+      - uses: actions-rs/cargo@v1
+        name: Check
+        with:
+          command: check
+          args: -q --all-targets --target wasm32-unknown-unknown --all-features
+      
+      - uses: actions-rs/cargo@v1
+        name: Documentation
+        with:
+          command: doc
+          args: -q --no-deps --all-features
+
+      - uses: actions-rs/cargo@v1
+        name: Compile tests
+        with:
+          command: test
+          args: --tests --all-features --no-run
+
+      - uses: actions-rs/cargo@v1
+        name: Run tests
+        with:
+          command: test
+          args: --tests --all-features
+
+      - name: Install Dfinity deps
+        run: cargo install ic-cdk-optimizer -q --root target
+
+      - name: Build optimized WASM
+        run: ./build.sh
