@@ -32,9 +32,7 @@ thread_local! {
 pub struct CanisterState {
 	/// Tracks all deposits for unregistered channels. For registered channels,
 	/// tracks withdrawable balances instead.
-	deposits: HashMap<Funding, Amount>,
-	/// Tracks the deposits per channel.
-	funds: HashMap<ChannelId, Amount>,
+	holdings: HashMap<Funding, Amount>,
 	/// Tracks all registered channels.
 	channels: HashMap<ChannelId, RegisteredState>,
 }
@@ -77,20 +75,42 @@ fn query_deposit(funding: Funding) -> Option<Amount> {
 
 impl CanisterState {
 	pub fn deposit(&mut self, funding: Funding, amount: Amount) -> Result<()> {
-		*self.funds
-			.entry(funding.channel.clone())
-			.or_insert(Default::default()) += amount.clone();
-		*self.deposits
+		*self.holdings
 			.entry(funding)
 			.or_insert(Default::default()) += amount;
 		Ok(())
 	}
 
 	pub fn query_deposit(&self, funding: Funding) -> Option<Amount> {
-		match self.deposits.get(&funding) {
+		match self.holdings.get(&funding) {
 			None => None,
 			Some(a) => Some(a.clone()),
 		}
+	}
+
+	/// Updates the holdings associated with a channel to the outcome of the
+	/// supplied state, then registers the state.
+	pub fn realise_outcome(&mut self, params: &Params, state: RegisteredState) {
+		for (i, outcome) in state.state.allocation.iter().enumerate() {
+			self.holdings.insert(
+				Funding::new(
+					state.state.channel.clone(),
+					params.participants[i].clone()),
+				outcome.clone());
+		}
+
+		self.channels.insert(state.state.channel.clone(), state);
+	}
+
+	/// Calculates the total funds held in a channel. If the channel is unknown
+	/// and there are no deposited funds for the channel, returns 0.
+	pub fn channel_funds(&self, channel: &ChannelId, params: &Params) -> Amount {
+		let mut acc = Amount::default();
+		for pk in params.participants.iter() {
+			let funding = Funding::new(channel.clone(), pk.clone());
+			acc += self.holdings.get(&funding).unwrap_or(&Amount::default()).clone();
+		}
+		return acc;
 	}
 
 	pub fn conclude(&mut self, params: Params, state: FullySignedState, now: Timestamp) -> Result<()> {
@@ -100,12 +120,12 @@ impl CanisterState {
 			}
 		}
 
-		let funds = self.funds.get(&state.state.channel).ok_or(
-			Error::InsufficientFunding)?;
+		let funds = &self.channel_funds(&state.state.channel, &params);
 
-		self.channels.insert(
-			state.state.channel.clone(),
+		self.realise_outcome(
+			&params,
 			RegisteredState::conclude(state, &params, funds)?);
+
 		Ok(())
 	}
 
@@ -119,12 +139,12 @@ impl CanisterState {
 			}
 		}
 
-		let funds = self.funds.get(&state.state.channel).ok_or(
-			Error::InsufficientFunding)?;
+		let funds = &self.channel_funds(&state.state.channel, &params);
 
-		self.channels.insert(
-			state.state.channel.clone(),
+		self.realise_outcome(
+			&params,
 			RegisteredState::dispute(state, &params, funds, now)?);
+
 		Ok(())
 	}
 }
@@ -269,4 +289,17 @@ fn test_dispute_settled_refutation() {
 	assert_eq!(s.canister.dispute(s.params, sstate, time), Err(Error::AlreadyConcluded));
 	assert!(s.canister.channels.get(&channel).unwrap().settled(time));
 	assert_eq!(s.canister.channels.get(&channel).unwrap().state.version, version);
+}
+
+#[test]
+fn test_holding_tracking_deposit() {
+	let s = test::Setup::new(0xd9, true, true);
+	let sum = s.state.allocation[0].clone() + s.state.allocation[1].clone();
+	assert_eq!(s.canister.channel_funds(&s.state.channel, &s.params), sum);
+}
+
+#[test]
+fn test_holding_tracking_none() {
+	let s = test::Setup::new(0xd9, true, false);
+	assert_eq!(s.canister.channel_funds(&s.state.channel, &s.params), 0);
 }
