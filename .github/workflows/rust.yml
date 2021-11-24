@@ -34,7 +34,7 @@ jobs:
         name: Check
         with:
           command: check
-          args: -q --all-targets --target wasm32-unknown-unknown --all-features
+          args: -q --target wasm32-unknown-unknown --all-features
       
       - uses: actions-rs/cargo@v1
         name: Documentation
