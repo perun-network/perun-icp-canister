@@ -12,27 +12,18 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use core::cmp::*;
+use crate::error::{Error as CError, Result as CanisterResult};
 use candid::Encode;
-use crate::error::{
-	Error as CError,
-	Result as CanisterResult,
-};
-pub use ic_cdk::export::candid::{
-	CandidType, Deserialize,
-	Int, Nat,
-	types::{
-		Serializer,
-		Type,
-	},
-};
+use core::cmp::*;
 use digest::{FixedOutputDirty, Update};
-use ed25519_dalek::{PublicKey, Signature, Sha512 as Hasher};
-use serde::de::{Deserializer, Visitor, Error};
-
+use ed25519_dalek::{PublicKey, Sha512 as Hasher, Signature};
+pub use ic_cdk::export::candid::{
+	types::{Serializer, Type},
+	CandidType, Deserialize, Int, Nat,
+};
+use serde::de::{Deserializer, Error, Visitor};
 
 // Type definitions start here.
-
 
 #[derive(PartialEq, Eq, Default, Clone)]
 /// A hash as used by the signature scheme.
@@ -73,7 +64,7 @@ pub struct Params {
 }
 
 #[derive(Deserialize, CandidType, Default, Clone)]
-/// The mutable parameters and state of a Perun channel. Contains 
+/// The mutable parameters and state of a Perun channel. Contains
 pub struct State {
 	/// The cannel's unique identifier.
 	pub channel: ChannelId,
@@ -137,7 +128,9 @@ pub struct Funding {
 
 impl<'de> Deserialize<'de> for Hash {
 	fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
-	where D: Deserializer<'de> {
+	where
+		D: Deserializer<'de>,
+	{
 		let bytes: &[u8] = &deserializer.deserialize_bytes(BlobDecoderVisitor::default())?;
 		if bytes.len() != <Hasher as digest::Digest>::output_size() {
 			Err(D::Error::invalid_length(bytes.len(), &"hash digest"))?;
@@ -147,10 +140,14 @@ impl<'de> Deserialize<'de> for Hash {
 }
 
 impl CandidType for Hash {
-	fn _ty() -> Type { Type::Vec(Box::new(Type::Nat8)) }
+	fn _ty() -> Type {
+		Type::Vec(Box::new(Type::Nat8))
+	}
 
 	fn idl_serialize<S>(&self, serializer: S) -> core::result::Result<(), S::Error>
-	where S: Serializer {
+	where
+		S: Serializer,
+	{
 		serializer.serialize_blob(&self.0.as_slice())
 	}
 }
@@ -167,7 +164,7 @@ impl Hash {
 		h.update(msg);
 		let mut out: Hash = Hash::default();
 		h.finalize_into_dirty(&mut out.0);
-		return out
+		return out;
 	}
 }
 
@@ -175,23 +172,29 @@ impl Hash {
 
 impl<'de> Deserialize<'de> for L2Account {
 	fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
-	where D: Deserializer<'de> {
+	where
+		D: Deserializer<'de>,
+	{
 		let bytes: &[u8] = &deserializer.deserialize_bytes(BlobDecoderVisitor::default())?;
-		let pk = PublicKey::from_bytes(bytes).ok().ok_or(
-			D::Error::invalid_length(bytes.len(), &"public key"))?;
+		let pk = PublicKey::from_bytes(bytes)
+			.ok()
+			.ok_or(D::Error::invalid_length(bytes.len(), &"public key"))?;
 		Ok(L2Account(pk))
 	}
 }
 
 impl CandidType for L2Account {
-	fn _ty() -> Type { Type::Vec(Box::new(Type::Nat8)) }
+	fn _ty() -> Type {
+		Type::Vec(Box::new(Type::Nat8))
+	}
 
 	fn idl_serialize<S>(&self, serializer: S) -> core::result::Result<(), S::Error>
-	where S: Serializer {
+	where
+		S: Serializer,
+	{
 		serializer.serialize_blob(&self.0.to_bytes())
 	}
 }
-
 
 impl std::hash::Hash for L2Account {
 	fn hash<H: std::hash::Hasher>(self: &Self, state: &mut H) {
@@ -203,32 +206,38 @@ impl std::hash::Hash for L2Account {
 
 impl<'de> Deserialize<'de> for L2Signature {
 	fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
-	where D: Deserializer<'de> {
+	where
+		D: Deserializer<'de>,
+	{
 		let bytes: &[u8] = &deserializer.deserialize_bytes(BlobDecoderVisitor::default())?;
-		let bytes64 = as_bytes64(bytes).ok_or(
-			D::Error::invalid_length(bytes.len(), &"signature"))?;
+		let bytes64 =
+			as_bytes64(bytes).ok_or(D::Error::invalid_length(bytes.len(), &"signature"))?;
 		let sig = Signature::new(bytes64);
 		Ok(L2Signature(sig))
 	}
 }
 
-
 impl CandidType for L2Signature {
-	fn _ty() -> Type { Type::Vec(Box::new(Type::Nat8)) }
+	fn _ty() -> Type {
+		Type::Vec(Box::new(Type::Nat8))
+	}
 
 	fn idl_serialize<S>(&self, serializer: S) -> core::result::Result<(), S::Error>
-	where S: Serializer {
+	where
+		S: Serializer,
+	{
 		serializer.serialize_blob(&self.0.to_bytes())
 	}
 }
-
 
 // State
 
 impl State {
 	pub fn validate_sig(&self, sig: &L2Signature, pk: &L2Account) -> CanisterResult<()> {
 		let enc = Encode!(self).expect("encoding state");
-		pk.0.verify_strict(&enc, &sig.0).ok().ok_or(CError::Authentication)
+		pk.0.verify_strict(&enc, &sig.0)
+			.ok()
+			.ok_or(CError::Authentication)
 	}
 
 	pub fn funds(&self) -> Amount {
@@ -286,7 +295,11 @@ impl FullySignedState {
 // RegisteredState
 
 impl RegisteredState {
-	pub fn conclude(state: FullySignedState, params: &Params, funds: &Amount) -> CanisterResult<Self> {
+	pub fn conclude(
+		state: FullySignedState,
+		params: &Params,
+		funds: &Amount,
+	) -> CanisterResult<Self> {
 		state.validate_final(params, funds)?;
 		Ok(Self {
 			state: state.state,
@@ -294,9 +307,14 @@ impl RegisteredState {
 		})
 	}
 
-	pub fn dispute(state: FullySignedState, params: &Params, funds: &Amount, now: Timestamp) -> CanisterResult<Self> {
+	pub fn dispute(
+		state: FullySignedState,
+		params: &Params,
+		funds: &Amount,
+		now: Timestamp,
+	) -> CanisterResult<Self> {
 		state.validate(params, funds)?;
-		Ok(Self{
+		Ok(Self {
 			state: state.state,
 			timeout: now + params.challenge_duration,
 		})
@@ -306,7 +324,6 @@ impl RegisteredState {
 		self.state.finalized || now >= self.timeout
 	}
 }
-
 
 // Funding
 
@@ -319,16 +336,15 @@ impl Funding {
 	}
 }
 
-
 // Miscellaneous helpers
 
 /// Needed to decode a blob into a public key's 64 byte
-fn as_bytes64(v: &[u8]) -> Option<[u8;64]> {
+fn as_bytes64(v: &[u8]) -> Option<[u8; 64]> {
 	if v.len() != 64 {
 		return None;
 	}
 
-	let mut ret: [u8;64] = [0; 64];
+	let mut ret: [u8; 64] = [0; 64];
 	let mut i = 0;
 	while i < 64 {
 		ret[i] = v[i];
