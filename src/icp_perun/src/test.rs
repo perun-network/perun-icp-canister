@@ -72,6 +72,11 @@ impl Setup {
 		self.sign_encoding(&Encode!(&"invalid state").unwrap())
 	}
 
+	/// Returns the funding for a participant.
+	pub fn funding(&self, part: usize) -> Funding {
+		Funding::new(self.params.id(), self.parts[part].clone())
+	}
+
 	fn sign_encoding(&self, enc: &[u8]) -> FullySignedState {
 		let mut state = FullySignedState::default();
 		state.state = self.state.clone();

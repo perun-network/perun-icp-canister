@@ -1,7 +1,7 @@
 {
   "canisters": {
     "icp_perun": {
-      "build": "cargo build --target wasm32-unknown-unknown --package icp_perun --release",
+      "build": "./build.sh",
       "candid": "src/icp_perun/src/icp_perun.did",
       "wasm": "target/wasm32-unknown-unknown/release/icp_perun.wasm",
       "type": "custom"
