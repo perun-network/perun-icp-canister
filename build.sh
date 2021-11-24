@@ -11,7 +11,8 @@ cargo --version >/dev/null || die "Must have cargo installed."
 export RUSTFLAGS="--remap-path-prefix=\"${PWD}\"=./ --remap-path-prefix=\"${HOME}\"=_/"
 cargo build --release --target wasm32-unknown-unknown
 
-if cargo install ic-cdk-optimizer --root target; then
+echo "Installing ic-cdk-optimizer…"
+if cargo install ic-cdk-optimizer --root target -q; then
 	target/bin/ic-cdk-optimizer \
 		target/wasm32-unknown-unknown/release/icp_perun.wasm \
 		-o target/wasm32-unknown-unknown/release/icp_perun-opt.wasm
