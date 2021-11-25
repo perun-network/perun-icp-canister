@@ -168,7 +168,7 @@ impl std::fmt::Display for Hash {
 }
 
 impl std::hash::Hash for Hash {
-	fn hash<H: std::hash::Hasher>(self: &Self, state: &mut H) {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		self.0.as_slice().hash(state);
 	}
 }
@@ -179,7 +179,7 @@ impl Hash {
 		h.update(msg);
 		let mut out: Hash = Hash::default();
 		h.finalize_into_dirty(&mut out.0);
-		return out;
+		out
 	}
 }
 
@@ -212,7 +212,7 @@ impl CandidType for L2Account {
 }
 
 impl std::hash::Hash for L2Account {
-	fn hash<H: std::hash::Hasher>(self: &Self, state: &mut H) {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		self.0.to_bytes().hash(state);
 	}
 }
@@ -255,23 +255,21 @@ impl State {
 	}
 
 	pub fn funds(&self) -> Amount {
-		let mut funds = Amount::default();
-		for amount in self.allocation.iter() {
-			funds += amount.clone();
-		}
-		return funds;
+		self.allocation
+			.iter()
+			.fold(Amount::default(), |x, y| x + y.clone())
 	}
 }
 
 // Params
 
 impl Params {
-	pub fn id(self: &Self) -> ChannelId {
+	pub fn id(&self) -> ChannelId {
 		Hash::digest(&Encode!(self).unwrap())
 	}
 
-	pub fn matches(self: &Self, state: &State) -> bool {
-		return self.id() == state.channel && self.participants.len() == state.allocation.len();
+	pub fn matches(&self, state: &State) -> bool {
+		self.id() == state.channel && self.participants.len() == state.allocation.len()
 	}
 }
 
@@ -285,7 +283,7 @@ impl FullySignedState {
 		ensure!(funds >= &self.state.funds(), InsufficientFunding);
 
 		for (i, pk) in params.participants.iter().enumerate() {
-			self.state.validate_sig(&self.sigs[i], &pk)?;
+			self.state.validate_sig(&self.sigs[i], pk)?;
 		}
 
 		Ok(())
@@ -335,8 +333,8 @@ impl RegisteredState {
 impl Funding {
 	pub fn new(channel: ChannelId, participant: L2Account) -> Self {
 		Self {
-			channel: channel,
-			participant: participant,
+			channel,
+			participant,
 		}
 	}
 }
