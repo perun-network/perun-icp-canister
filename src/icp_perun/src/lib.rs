@@ -127,9 +127,7 @@ impl CanisterState {
 		now: Timestamp,
 	) -> Result<()> {
 		if let Some(old_state) = self.channels.get(&state.state.channel) {
-			if old_state.settled(now) {
-				Err(Error::AlreadyConcluded)?;
-			}
+			ensure!(!old_state.settled(now), AlreadyConcluded);
 		}
 
 		let funds = &self.channel_funds(&state.state.channel, &params);
@@ -146,12 +144,8 @@ impl CanisterState {
 		now: Timestamp,
 	) -> Result<()> {
 		if let Some(old_state) = self.channels.get(&state.state.channel) {
-			if old_state.settled(now) {
-				Err(Error::AlreadyConcluded)?;
-			}
-			if old_state.state.version >= state.state.version {
-				Err(Error::OutdatedState)?;
-			}
+			ensure!(!old_state.settled(now), AlreadyConcluded);
+			ensure!(old_state.state.version < state.state.version, OutdatedState);
 		}
 
 		let funds = &self.channel_funds(&state.state.channel, &params);
