@@ -31,7 +31,7 @@ pub fn keys(rand: u8, id: u8) -> (ExpandedSecretKey, L2Account) {
 	let sk = SecretKey::from_bytes(&hash.as_slice()[..32]).unwrap();
 	let esk = ExpandedSecretKey::from(&sk);
 	let pk = L2Account((&sk).into());
-	return (esk, pk);
+	(esk, pk)
 }
 
 impl Setup {
@@ -62,7 +62,7 @@ impl Setup {
 			}
 		}
 
-		return ret;
+		ret
 	}
 
 	pub fn sign(&self) -> FullySignedState {
@@ -82,10 +82,10 @@ impl Setup {
 		state.state = self.state.clone();
 		for (i, key) in self.parts.iter().enumerate() {
 			state.sigs.push(L2Signature(
-				self.secrets[i].sign(&enc, &key.0).to_bytes().into(),
+				self.secrets[i].sign(enc, &key.0).to_bytes().into(),
 			))
 		}
 
-		return state;
+		state
 	}
 }
