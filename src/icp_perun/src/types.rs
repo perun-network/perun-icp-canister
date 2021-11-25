@@ -12,7 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use crate::error::{Error as CError, Result as CanisterResult};
+use crate::{
+	ensure,
+	error::{Error, Result as CanisterResult},
+};
 use candid::Encode;
 use core::cmp::*;
 use digest::{FixedOutputDirty, Update};
@@ -21,7 +24,7 @@ pub use ic_cdk::export::candid::{
 	types::{Serializer, Type},
 	CandidType, Deserialize, Int, Nat,
 };
-use serde::de::{Deserializer, Error};
+use serde::de::{Deserializer, Error as _};
 use serde_bytes::ByteBuf;
 
 // Type definitions start here.
@@ -133,9 +136,10 @@ impl<'de> Deserialize<'de> for Hash {
 		D: Deserializer<'de>,
 	{
 		let bytes = ByteBuf::deserialize(deserializer)?;
-		if bytes.len() != <Hasher as digest::Digest>::output_size() {
-			Err(D::Error::invalid_length(bytes.len(), &"hash digest"))?;
-		}
+		ensure!(
+			bytes.len() == <Hasher as digest::Digest>::output_size(),
+			D::Error::invalid_length(bytes.len(), &"hash digest")
+		);
 		Ok(Hash(*digest::Output::<Hasher>::from_slice(
 			bytes.as_slice(),
 		)))
@@ -164,7 +168,7 @@ impl std::fmt::Display for Hash {
 }
 
 impl std::hash::Hash for Hash {
-	fn hash<H: std::hash::Hasher>(self: &Self, state: &mut H) {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		self.0.as_slice().hash(state);
 	}
 }
@@ -175,7 +179,7 @@ impl Hash {
 		h.update(msg);
 		let mut out: Hash = Hash::default();
 		h.finalize_into_dirty(&mut out.0);
-		return out;
+		out
 	}
 }
 
@@ -208,7 +212,7 @@ impl CandidType for L2Account {
 }
 
 impl std::hash::Hash for L2Account {
-	fn hash<H: std::hash::Hasher>(self: &Self, state: &mut H) {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		self.0.to_bytes().hash(state);
 	}
 }
@@ -247,27 +251,25 @@ impl State {
 		let enc = Encode!(self).expect("encoding state");
 		pk.0.verify_strict(&enc, &sig.0)
 			.ok()
-			.ok_or(CError::Authentication)
+			.ok_or(Error::Authentication)
 	}
 
 	pub fn funds(&self) -> Amount {
-		let mut funds = Amount::default();
-		for amount in self.allocation.iter() {
-			funds += amount.clone();
-		}
-		return funds;
+		self.allocation
+			.iter()
+			.fold(Amount::default(), |x, y| x + y.clone())
 	}
 }
 
 // Params
 
 impl Params {
-	pub fn id(self: &Self) -> ChannelId {
+	pub fn id(&self) -> ChannelId {
 		Hash::digest(&Encode!(self).unwrap())
 	}
 
-	pub fn matches(self: &Self, state: &State) -> bool {
-		return self.id() == state.channel && self.participants.len() == state.allocation.len();
+	pub fn matches(&self, state: &State) -> bool {
+		self.id() == state.channel && self.participants.len() == state.allocation.len()
 	}
 }
 
@@ -275,29 +277,20 @@ impl Params {
 
 impl FullySignedState {
 	pub fn validate(&self, params: &Params, funds: &Amount) -> CanisterResult<()> {
-		if self.state.channel != params.id() {
-			Err(CError::InvalidInput)?;
-		}
-		if self.sigs.len() != params.participants.len() {
-			Err(CError::InvalidInput)?;
-		}
-		if self.sigs.len() != self.state.allocation.len() {
-			Err(CError::InvalidInput)?;
-		}
+		ensure!(self.state.channel == params.id(), InvalidInput);
+		ensure!(self.sigs.len() == params.participants.len(), InvalidInput);
+		ensure!(self.sigs.len() == self.state.allocation.len(), InvalidInput);
+		ensure!(funds >= &self.state.funds(), InsufficientFunding);
+
 		for (i, pk) in params.participants.iter().enumerate() {
-			self.state.validate_sig(&self.sigs[i], &pk)?;
-		}
-		if funds < &self.state.funds() {
-			Err(CError::InsufficientFunding)?;
+			self.state.validate_sig(&self.sigs[i], pk)?;
 		}
 
 		Ok(())
 	}
 
 	pub fn validate_final(&self, params: &Params, funds: &Amount) -> CanisterResult<()> {
-		if !self.state.finalized {
-			Err(CError::NotFinalized)?;
-		}
+		ensure!(self.state.finalized, NotFinalized);
 		self.validate(params, funds)
 	}
 }
@@ -340,8 +333,8 @@ impl RegisteredState {
 impl Funding {
 	pub fn new(channel: ChannelId, participant: L2Account) -> Self {
 		Self {
-			channel: channel,
-			participant: participant,
+			channel,
+			participant,
 		}
 	}
 }

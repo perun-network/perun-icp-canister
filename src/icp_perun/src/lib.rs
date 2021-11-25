@@ -69,7 +69,7 @@ fn conclude(params: Params, state: FullySignedState) -> Option<Error> {
 
 #[ic_cdk_macros::update]
 /// Withdraws the specified participant's funds from a settled channel.
-fn withdraw(_request: WithdrawalRequest, _auth: L2Signature) -> () {}
+fn withdraw(_request: WithdrawalRequest, _auth: L2Signature) {}
 
 #[ic_cdk_macros::query]
 /// Returns the funds deposited for a channel's specified participant, if any.
@@ -86,10 +86,7 @@ impl CanisterState {
 	}
 
 	pub fn query_deposit(&self, funding: Funding) -> Option<Amount> {
-		match self.holdings.get(&funding) {
-			None => None,
-			Some(a) => Some(a.clone()),
-		}
+		self.holdings.get(&funding).cloned()
 	}
 
 	/// Updates the holdings associated with a channel to the outcome of the
@@ -117,7 +114,7 @@ impl CanisterState {
 				.unwrap_or(&Amount::default())
 				.clone();
 		}
-		return acc;
+		acc
 	}
 
 	pub fn conclude(
@@ -127,9 +124,7 @@ impl CanisterState {
 		now: Timestamp,
 	) -> Result<()> {
 		if let Some(old_state) = self.channels.get(&state.state.channel) {
-			if old_state.settled(now) {
-				Err(Error::AlreadyConcluded)?;
-			}
+			ensure!(!old_state.settled(now), AlreadyConcluded);
 		}
 
 		let funds = &self.channel_funds(&state.state.channel, &params);
@@ -146,12 +141,8 @@ impl CanisterState {
 		now: Timestamp,
 	) -> Result<()> {
 		if let Some(old_state) = self.channels.get(&state.state.channel) {
-			if old_state.settled(now) {
-				Err(Error::AlreadyConcluded)?;
-			}
-			if old_state.state.version >= state.state.version {
-				Err(Error::OutdatedState)?;
-			}
+			ensure!(!old_state.settled(now), AlreadyConcluded);
+			ensure!(old_state.state.version < state.state.version, OutdatedState);
 		}
 
 		let funds = &self.channel_funds(&state.state.channel, &params);

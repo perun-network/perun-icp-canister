@@ -16,9 +16,14 @@ use ic_cdk::export::candid::CandidType;
 
 #[macro_export]
 macro_rules! ensure {
-	($cond:expr) => {
+	($cond:expr, $err:ident) => {
 		if !($cond) {
-			panic!("Error");
+			return Err(Error::$err);
+		}
+	};
+	($cond:expr, $err:expr) => {
+		if !($cond) {
+			return Err($err);
 		}
 	};
 }
