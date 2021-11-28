@@ -55,7 +55,7 @@ jobs:
           args: --tests --all-features
 
       - name: Install Dfinity deps
-        run: cargo install ic-cdk-optimizer -q --root target
+        run: target/bin/ic-cdk-optimizer --version || cargo install ic-cdk-optimizer -q --root target
 
       - name: Build optimized WASM
         run: ./build.sh
