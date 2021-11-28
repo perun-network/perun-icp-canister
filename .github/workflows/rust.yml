@@ -46,7 +46,7 @@ jobs:
         name: Compile tests
         with:
           command: test
-          args: --tests --all-features --no-run
+          args: -q --tests --all-features --no-run
 
       - uses: actions-rs/cargo@v1
         name: Run tests
