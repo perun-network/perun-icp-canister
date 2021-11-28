@@ -59,3 +59,9 @@ jobs:
 
       - name: Build optimized WASM
         run: ./build.sh
+
+      - name: Compile Examples
+        run: |
+          # Change the crate type from "cdylib" to "lib".
+          sed -i 's/"cdylib"/"lib"/g' src/icp_perun/Cargo.toml
+          cargo build -q --examples
