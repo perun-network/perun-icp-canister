@@ -77,6 +77,22 @@ impl Setup {
 		Funding::new(self.params.id(), self.parts[part].clone())
 	}
 
+	pub fn withdrawal(&self, part: usize, receiver: L1Account) -> (WithdrawalRequest, L2Signature) {
+		let funding = self.funding(part);
+		let req = WithdrawalRequest::new(funding, receiver);
+		(req.clone(), self.sign_withdrawal(&req, part))
+	}
+
+	fn sign_withdrawal(&self, req: &WithdrawalRequest, part: usize) -> L2Signature {
+		let enc = Encode!(req).unwrap();
+		L2Signature(
+			self.secrets[part]
+				.sign(&enc, &self.parts[part].0)
+				.to_bytes()
+				.into(),
+		)
+	}
+
 	fn sign_encoding(&self, enc: &[u8]) -> FullySignedState {
 		let mut state = FullySignedState::default();
 		state.state = self.state.clone();
