@@ -39,26 +39,31 @@ Change the `"cdylib"` in the [Cargo.toml] to `"lib"`.
 
 4. Run the command below with the *Perun* canister ID that you copied:
 ```sh
-RUST_LOG=info cargo run --example deposit "rrkah-fqaaa-aaaaa-aaaaq-cai"
+RUST_LOG=info cargo run --example happy_walkthrough "rrkah-fqaaa-aaaaa-aaaaq-cai"
 ```
-The output should look like this:  
-```pre
-INFO  deposit > URL: http://localhost:8000/
-INFO  deposit > Canister ID: rrkah-fqaaa-aaaaa-aaaaq-cai
-INFO  deposit > Depositing for channel: 0x920c7366… for peer IDx: 0, add: 111 ICP
-INFO  deposit > Querying for   channel: 0x920c7366… for peer IDx: 0, now: 111 ICP
-INFO  deposit > Depositing for channel: 0x920c7366… for peer IDx: 0, add: 111 ICP
-INFO  deposit > Querying for   channel: 0x920c7366… for peer IDx: 0, now: 222 ICP
-INFO  deposit > Depositing for channel: 0x920c7366… for peer IDx: 0, add: 111 ICP
-INFO  deposit > Querying for   channel: 0x920c7366… for peer IDx: 0, now: 333 ICP
-INFO  deposit > Depositing for channel: 0x920c7366… for peer IDx: 0, add: 111 ICP
-INFO  deposit > Querying for   channel: 0x920c7366… for peer IDx: 0, now: 444 ICP
-INFO  deposit > Depositing for channel: 0x920c7366… for peer IDx: 0, add: 111 ICP
-INFO  deposit > Querying for   channel: 0x920c7366… for peer IDx: 0, now: 555 ICP
+The output should look like this minus the comments:  
+```sh
+INFO  happy_walkthrough > URL: http://localhost:8000/
+INFO  happy_walkthrough > Canister ID: rrkah-fqaaa-aaaaa-aaaaq-cai
+# Bob and Alice start with 0 ICP in the channel.
+INFO  happy_walkthrough > Querying deposit channel: 0x920c7366… for peer IDx: 0, now: 0 ICP
+INFO  happy_walkthrough > Querying deposit channel: 0x920c7366… for peer IDx: 1, now: 0 ICP
+# Bob and Alice deposit 242 and 194 ICP in the channel.
+INFO  happy_walkthrough > Depositing       channel: 0x920c7366… for peer IDx: 0, add: 242 ICP
+INFO  happy_walkthrough > Depositing       channel: 0x920c7366… for peer IDx: 1, add: 194 ICP
+# Bob and Alice now have 242 and 194 ICP in the channel.
+INFO  happy_walkthrough > Querying deposit channel: 0x920c7366… for peer IDx: 0, now: 242 ICP
+INFO  happy_walkthrough > Querying deposit channel: 0x920c7366… for peer IDx: 1, now: 194 ICP
+# They exchange a state…
+# Bob and Alice can conclude the channel with a final state.
+INFO  happy_walkthrough > Concluding       channel: 0x920c7366…
+# Bob and Alice withdraw their funds from the channel.
+INFO  happy_walkthrough > Withdrawing      channel: 0x920c7366… for peer IDx: 0
+INFO  happy_walkthrough > Withdrawing      channel: 0x920c7366… for peer IDx: 1
+# Bob and Alice now have 0 ICP in the channel.
+INFO  happy_walkthrough > Querying deposit channel: 0x920c7366… for peer IDx: 0, now: 0 ICP
+INFO  happy_walkthrough > Querying deposit channel: 0x920c7366… for peer IDx: 1, now: 0 ICP
 ```
-
-You see that the example deposits `111 ICP` five times and queries the currently
-deposited amount after every deposit.
 
 [ic-agent]: https://crates.io/crates/ic-agent
 [Cargo.toml]: Cargo.toml
