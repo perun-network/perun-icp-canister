@@ -69,7 +69,10 @@ fn conclude(params: Params, state: FullySignedState) -> Option<Error> {
 
 #[ic_cdk_macros::update]
 /// Withdraws the specified participant's funds from a settled channel.
-fn withdraw(_request: WithdrawalRequest, _auth: L2Signature) {}
+fn withdraw(request: WithdrawalRequest, auth: L2Signature) -> (Option<Amount>, Option<Error>) {
+	let result = STATE.with(|s| s.borrow_mut().withdraw(request, auth, blocktime()));
+	(result.as_ref().ok().cloned(), result.err())
+}
 
 #[ic_cdk_macros::query]
 /// Returns the funds deposited for a channel's specified participant, if any.
@@ -153,6 +156,22 @@ impl CanisterState {
 		);
 
 		Ok(())
+	}
+
+	pub fn withdraw(
+		&mut self,
+		req: WithdrawalRequest,
+		auth: L2Signature,
+		now: Timestamp,
+	) -> Result<Amount> {
+		req.validate_sig(&auth)?;
+		match self.channels.get(&req.funding.channel) {
+			None => Err(Error::NotFinalized),
+			Some(state) => {
+				ensure!(state.settled(now), NotFinalized);
+				Ok(self.holdings.remove(&req.funding).unwrap_or_default())
+			}
+		}
 	}
 }
 

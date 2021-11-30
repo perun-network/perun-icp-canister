@@ -328,6 +328,20 @@ impl RegisteredState {
 	}
 }
 
+// WithdrawalRequest
+
+impl WithdrawalRequest {
+	pub fn validate_sig(&self, sig: &L2Signature) -> CanisterResult<()> {
+		let enc = Encode!(self).expect("encoding withdrawal request");
+		self.funding
+			.participant
+			.0
+			.verify_strict(&enc, &sig.0)
+			.ok()
+			.ok_or(Error::Authentication)
+	}
+}
+
 // Funding
 
 impl Funding {
