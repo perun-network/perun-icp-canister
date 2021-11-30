@@ -46,7 +46,7 @@ jobs:
         name: Compile tests
         with:
           command: test
-          args: --tests --all-features --no-run
+          args: -q --tests --all-features --no-run
 
       - uses: actions-rs/cargo@v1
         name: Run tests
@@ -55,7 +55,13 @@ jobs:
           args: --tests --all-features
 
       - name: Install Dfinity deps
-        run: cargo install ic-cdk-optimizer -q --root target
+        run: target/bin/ic-cdk-optimizer --version || cargo install ic-cdk-optimizer -q --root target
 
       - name: Build optimized WASM
         run: ./build.sh
+
+      - name: Compile Examples
+        run: |
+          # Change the crate type from "cdylib" to "lib".
+          sed -i 's/"cdylib"/"lib"/g' src/icp_perun/Cargo.toml
+          cargo build -q --examples
