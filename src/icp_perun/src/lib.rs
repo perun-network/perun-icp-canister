@@ -69,7 +69,10 @@ fn conclude(params: Params, state: FullySignedState) -> Option<Error> {
 
 #[ic_cdk_macros::update]
 /// Withdraws the specified participant's funds from a settled channel.
-fn withdraw(_request: WithdrawalRequest, _auth: L2Signature) {}
+fn withdraw(request: WithdrawalRequest, auth: L2Signature) -> (Option<Amount>, Option<Error>) {
+	let result = STATE.with(|s| s.borrow_mut().withdraw(request, auth, blocktime()));
+	(result.as_ref().ok().cloned(), result.err())
+}
 
 #[ic_cdk_macros::query]
 /// Returns the funds deposited for a channel's specified participant, if any.
@@ -153,6 +156,22 @@ impl CanisterState {
 		);
 
 		Ok(())
+	}
+
+	pub fn withdraw(
+		&mut self,
+		req: WithdrawalRequest,
+		auth: L2Signature,
+		now: Timestamp,
+	) -> Result<Amount> {
+		req.validate_sig(&auth)?;
+		match self.channels.get(&req.funding.channel) {
+			None => Err(Error::NotFinalized),
+			Some(state) => {
+				ensure!(state.settled(now), NotFinalized);
+				Ok(self.holdings.remove(&req.funding).unwrap_or_default())
+			}
+		}
 	}
 }
 
@@ -335,4 +354,72 @@ fn test_holding_tracking_deposit() {
 fn test_holding_tracking_none() {
 	let s = test::Setup::new(0xd9, true, false);
 	assert_eq!(s.canister.channel_funds(&s.state.channel, &s.params), 0);
+}
+
+#[test]
+fn test_withdraw() {
+	let mut s = test::Setup::new(0xab, true, true);
+	let sstate = s.sign();
+	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
+
+	let acc = L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parse account");
+	let (req, sig) = s.withdrawal(0, acc);
+
+	let holdings = s.canister.query_deposit(s.funding(0)).unwrap();
+	assert_eq!(
+		s.canister.withdraw(req.clone(), sig.clone(), 0),
+		Ok(holdings)
+	);
+
+	// Test that repeated withdraws return nothing.
+	assert_eq!(s.canister.withdraw(req, sig, 0), Ok(Amount::default()));
+}
+
+#[test]
+fn test_withdraw_invalid_sig() {
+	let mut s = test::Setup::new(0x28, true, true);
+	let sstate = s.sign();
+	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
+
+	let acc = L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parse account");
+	let (req, _) = s.withdrawal(0, acc);
+	let sig = s.sign_withdrawal(&req, 1); // sign with wrong user.
+
+	assert_eq!(s.canister.withdraw(req, sig, 0), Err(Error::Authentication));
+}
+
+#[test]
+fn test_withdraw_unknown_channel() {
+	let rand = 0x53;
+	let mut s = test::Setup::new(rand, true, true);
+	let unknown_id = test::Setup::new(rand + 1, false, false).params.id();
+	let sstate = s.sign();
+	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
+
+	let acc = L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parse account");
+	let (mut req, _) = s.withdrawal(0, acc);
+	req.funding.channel = unknown_id;
+
+	let sig = s.sign_withdrawal(&req, 0);
+
+	assert_eq!(s.canister.withdraw(req, sig, 0), Err(Error::NotFinalized));
+}
+
+#[test]
+fn test_withdraw_not_finalized() {
+	let mut s = test::Setup::new(0x59, false, true);
+	let now = 0;
+	let sstate = s.sign();
+	assert_eq!(s.canister.dispute(s.params.clone(), sstate, now), Ok(()));
+	assert!(!s
+		.canister
+		.channels
+		.get(&s.params.id())
+		.unwrap()
+		.settled(now));
+
+	let acc = L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parse account");
+	let (req, sig) = s.withdrawal(0, acc);
+
+	assert_eq!(s.canister.withdraw(req, sig, 0), Err(Error::NotFinalized));
 }

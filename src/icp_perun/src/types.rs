@@ -108,7 +108,7 @@ pub struct RegisteredState {
 	pub timeout: Timestamp,
 }
 
-#[derive(Deserialize, CandidType)]
+#[derive(Deserialize, CandidType, Clone)]
 /// Contains the payload of a request to withdraw a participant's funds from a
 /// registered channel. Does not contain the authorization signature.
 pub struct WithdrawalRequest {
@@ -325,6 +325,27 @@ impl RegisteredState {
 
 	pub fn settled(&self, now: Timestamp) -> bool {
 		self.state.finalized || now >= self.timeout
+	}
+}
+
+// WithdrawalRequest
+
+impl WithdrawalRequest {
+	pub fn new(funding: Funding, receiver: L1Account) -> Self {
+		Self {
+			funding: funding,
+			receiver: receiver,
+		}
+	}
+
+	pub fn validate_sig(&self, sig: &L2Signature) -> CanisterResult<()> {
+		let enc = Encode!(self).expect("encoding withdrawal request");
+		self.funding
+			.participant
+			.0
+			.verify_strict(&enc, &sig.0)
+			.ok()
+			.ok_or(Error::Authentication)
 	}
 }
 
