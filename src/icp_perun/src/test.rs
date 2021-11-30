@@ -83,7 +83,7 @@ impl Setup {
 		(req.clone(), self.sign_withdrawal(&req, part))
 	}
 
-	fn sign_withdrawal(&self, req: &WithdrawalRequest, part: usize) -> L2Signature {
+	pub fn sign_withdrawal(&self, req: &WithdrawalRequest, part: usize) -> L2Signature {
 		let enc = Encode!(req).unwrap();
 		L2Signature(
 			self.secrets[part]
