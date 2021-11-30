@@ -27,8 +27,14 @@ type FullySignedState = record {
 	sigs: vec blob;
 };
 
+type WithdrawalRequest = record {
+	funding: Funding;
+	receiver: principal;
+};
+
 service : {
 	"deposit": (Funding, Amount) -> (opt Error);
 	"query_deposit": (Funding) -> (opt Amount) query;
 	"conclude": (Params, FullySignedState) -> (opt Error);
+	"withdraw": (WithdrawalRequest, blob) -> (opt Amount, opt Error);
 }
