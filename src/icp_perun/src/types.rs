@@ -45,9 +45,9 @@ pub struct L2Signature(pub Signature);
 pub use ic_cdk::export::candid::Principal as L1Account;
 /// An amount of a currency.
 pub type Amount = Nat;
-/// Duration in seconds.
+/// Duration in nanoseconds (same as ICP timestamps).
 pub type Duration = u64;
-/// UNIX timestamp.
+/// Timestamp in nanoseconds (same as ICP timestamps).
 pub type Timestamp = u64;
 /// Unique Perun channel identifier.
 pub type ChannelId = Hash;
