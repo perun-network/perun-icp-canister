@@ -349,6 +349,21 @@ fn test_dispute_settled_refutation() {
 }
 
 #[test]
+/// Tests that the initial state of a channel in a dispute may be under-funded,
+/// but other states must not be.
+fn test_dispute_underfunded_initial_state() {
+	let time = 0;
+	let mut s = test::Setup::new(0x95, false, false);
+	s.state.version = 0;
+	assert_eq!(s.canister.dispute(s.params.clone(), s.sign(), time), Ok(()));
+	s.state.version = 1;
+	assert_eq!(
+		s.canister.dispute(s.params.clone(), s.sign(), time),
+		Err(Error::InsufficientFunding)
+	);
+}
+
+#[test]
 fn test_holding_tracking_deposit() {
 	let s = test::Setup::new(0xd9, true, true);
 	let sum = s.state.allocation[0].clone() + s.state.allocation[1].clone();
