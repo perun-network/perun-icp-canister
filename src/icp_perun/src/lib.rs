@@ -181,7 +181,8 @@ impl CanisterState {
 }
 
 #[test]
-/// Tests that deposits are added
+/// Tests that repeated deposits are added correctly and that only the specified
+/// participant is credited. Also tests the `query_deposit()` method.
 fn test_deposit() {
 	let mut s = test::Setup::new(0xd4, false, false);
 
@@ -205,7 +206,7 @@ fn test_deposit() {
 }
 
 #[test]
-/// Tests the happy conclude path.
+/// Tests the happy conclude path using a final state.
 fn test_conclude() {
 	let mut s = test::Setup::new(0xb2, true, true);
 	let sstate = s.sign();
@@ -224,7 +225,7 @@ fn test_conclude_nonfinal() {
 }
 
 #[test]
-/// Tests that params match the state.
+/// Tests that the supplied params must match the state.
 fn test_conclude_invalid_params() {
 	let mut s = test::Setup::new(0x23, true, true);
 	let sstate = s.sign();
@@ -271,6 +272,8 @@ fn test_conclude_invalid_allocation() {
 }
 
 #[test]
+/// Tests that a dispute with a nonfinal state will register the state properly
+/// but not mark it as final yet.
 fn test_dispute_nonfinal() {
 	let mut s = test::Setup::new(0xd0, false, true);
 	let now = 0;
@@ -281,6 +284,8 @@ fn test_dispute_nonfinal() {
 }
 
 #[test]
+/// Tests that dispute with a final state will register the state and mark it as
+/// final.
 fn test_dispute_final() {
 	let time = 0;
 	let mut s = test::Setup::new(0xd0, true, true);
@@ -291,6 +296,8 @@ fn test_dispute_final() {
 }
 
 #[test]
+/// Tests that a newer channel state can replace an older channel state if it is
+/// not yet final.
 fn test_dispute_valid_refutation() {
 	let time = 0;
 	let mut s = test::Setup::new(0xbf, false, true);
@@ -305,6 +312,7 @@ fn test_dispute_valid_refutation() {
 }
 
 #[test]
+/// Tests that a refutation using an older state fails.
 fn test_dispute_outdated_refutation() {
 	let time = 0;
 	let version = 10;
@@ -327,6 +335,7 @@ fn test_dispute_outdated_refutation() {
 }
 
 #[test]
+/// Tests that a settled state cannot be refuted.
 fn test_dispute_settled_refutation() {
 	let time = 0;
 	let version = 10;
@@ -364,6 +373,7 @@ fn test_dispute_underfunded_initial_state() {
 }
 
 #[test]
+/// Tests that the total deposits are properly tracked.
 fn test_holding_tracking_deposit() {
 	let s = test::Setup::new(0xd9, true, true);
 	let sum = s.state.allocation[0].clone() + s.state.allocation[1].clone();
@@ -371,12 +381,15 @@ fn test_holding_tracking_deposit() {
 }
 
 #[test]
+/// Tests that unregistered channels are counted as unfunded.
 fn test_holding_tracking_none() {
 	let s = test::Setup::new(0xd9, true, false);
 	assert_eq!(s.canister.channel_funds(&s.state.channel, &s.params), 0);
 }
 
 #[test]
+/// Tests the happy case for withdrawing funds from a settled channel. Also
+/// tests that redundant withdrawals will not withdraw any additional funds.
 fn test_withdraw() {
 	let mut s = test::Setup::new(0xab, true, true);
 	let sstate = s.sign();
@@ -395,6 +408,7 @@ fn test_withdraw() {
 }
 
 #[test]
+/// Tests that the signature of withdrawal requests must be valid.
 fn test_withdraw_invalid_sig() {
 	let mut s = test::Setup::new(0x28, true, true);
 	let sstate = s.sign();
@@ -407,6 +421,7 @@ fn test_withdraw_invalid_sig() {
 }
 
 #[test]
+/// Tests that the channel to be withdrawn from must be known.
 fn test_withdraw_unknown_channel() {
 	let rand = 0x53;
 	let mut s = test::Setup::new(rand, true, true);
@@ -423,6 +438,7 @@ fn test_withdraw_unknown_channel() {
 }
 
 #[test]
+/// Tests that the channel to be withdrawn from must be settled.
 fn test_withdraw_not_finalized() {
 	let mut s = test::Setup::new(0x59, false, true);
 	let now = 0;
