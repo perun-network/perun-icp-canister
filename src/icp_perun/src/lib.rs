@@ -93,13 +93,18 @@ impl CanisterState {
 	}
 
 	/// Updates the holdings associated with a channel to the outcome of the
-	/// supplied state, then registers the state.
-	pub fn realise_outcome(&mut self, params: &Params, state: RegisteredState) {
-		for (i, outcome) in state.state.allocation.iter().enumerate() {
-			self.holdings.insert(
-				Funding::new(state.state.channel.clone(), params.participants[i].clone()),
-				outcome.clone(),
-			);
+	/// supplied state, then registers the state. If the state is the channel's
+	/// initial state, the holdings are not updated, as initial states are
+	/// allowed to be under-funded and are otherwise expected to match the
+	/// deposit distribution exactly if fully funded.
+	pub fn register_channel(&mut self, params: &Params, state: RegisteredState) {
+		if !state.state.may_be_underfunded() {
+			for (i, outcome) in state.state.allocation.iter().enumerate() {
+				self.holdings.insert(
+					Funding::new(state.state.channel.clone(), params.participants[i].clone()),
+					outcome.clone(),
+				);
+			}
 		}
 
 		self.channels.insert(state.state.channel.clone(), state);
@@ -132,7 +137,7 @@ impl CanisterState {
 
 		let funds = &self.channel_funds(&state.state.channel, &params);
 
-		self.realise_outcome(&params, RegisteredState::conclude(state, &params, funds)?);
+		self.register_channel(&params, RegisteredState::conclude(state, &params, funds)?);
 
 		Ok(())
 	}
@@ -150,7 +155,7 @@ impl CanisterState {
 
 		let funds = &self.channel_funds(&state.state.channel, &params);
 
-		self.realise_outcome(
+		self.register_channel(
 			&params,
 			RegisteredState::dispute(state, &params, funds, now)?,
 		);
