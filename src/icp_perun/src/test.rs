@@ -26,6 +26,11 @@ pub struct Setup {
 	pub state: State,
 }
 
+/// Returns a default L1 account value.
+pub fn default_account() -> L1Account {
+	L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap()
+}
+
 pub fn keys(rand: u8, id: u8) -> (ExpandedSecretKey, L2Account) {
 	let hash = Hash::digest(&[rand, id, 1, 2, 3]).0;
 	let sk = SecretKey::from_bytes(&hash.as_slice()[..32]).unwrap();

@@ -382,8 +382,7 @@ fn test_withdraw() {
 	let sstate = s.sign();
 	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
 
-	let acc = L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parse account");
-	let (req, sig) = s.withdrawal(0, acc);
+	let (req, sig) = s.withdrawal(0, test::default_account());
 
 	let holdings = s.canister.query_deposit(s.funding(0)).unwrap();
 	assert_eq!(
@@ -401,8 +400,7 @@ fn test_withdraw_invalid_sig() {
 	let sstate = s.sign();
 	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
 
-	let acc = L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parse account");
-	let (req, _) = s.withdrawal(0, acc);
+	let (req, _) = s.withdrawal(0, test::default_account());
 	let sig = s.sign_withdrawal(&req, 1); // sign with wrong user.
 
 	assert_eq!(s.canister.withdraw(req, sig, 0), Err(Error::Authentication));
@@ -416,8 +414,7 @@ fn test_withdraw_unknown_channel() {
 	let sstate = s.sign();
 	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
 
-	let acc = L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parse account");
-	let (mut req, _) = s.withdrawal(0, acc);
+	let (mut req, _) = s.withdrawal(0, test::default_account());
 	req.funding.channel = unknown_id;
 
 	let sig = s.sign_withdrawal(&req, 0);
@@ -438,8 +435,7 @@ fn test_withdraw_not_finalized() {
 		.unwrap()
 		.settled(now));
 
-	let acc = L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parse account");
-	let (req, sig) = s.withdrawal(0, acc);
+	let (req, sig) = s.withdrawal(0, test::default_account());
 
 	assert_eq!(s.canister.withdraw(req, sig, 0), Err(Error::NotFinalized));
 }
