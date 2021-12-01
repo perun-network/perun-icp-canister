@@ -259,6 +259,10 @@ impl State {
 			.iter()
 			.fold(Amount::default(), |x, y| x + y.clone())
 	}
+
+	pub fn may_be_underfunded(&self) -> bool {
+		self.version == 0 && !self.finalized
+	}
 }
 
 // Params
@@ -280,7 +284,13 @@ impl FullySignedState {
 		ensure!(self.state.channel == params.id(), InvalidInput);
 		ensure!(self.sigs.len() == params.participants.len(), InvalidInput);
 		ensure!(self.sigs.len() == self.state.allocation.len(), InvalidInput);
-		ensure!(funds >= &self.state.funds(), InsufficientFunding);
+		// A channel state is allowed to be under-funded if it is the initial
+		// state, as funding happens only after the initial state is signed and
+		// we want to allow withdrawals from partially funded channels that get
+		// stuck in the initial state.
+		if !self.state.may_be_underfunded() {
+			ensure!(funds >= &self.state.funds(), InsufficientFunding);
+		}
 
 		for (i, pk) in params.participants.iter().enumerate() {
 			self.state.validate_sig(&self.sigs[i], pk)?;
