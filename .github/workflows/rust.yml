@@ -65,3 +65,4 @@ jobs:
           # Change the crate type from "cdylib" to "lib".
           sed -i 's/"cdylib"/"lib"/g' src/icp_perun/Cargo.toml
           cargo build -q --examples
+          git restore src/icp_perun/Cargo.toml
