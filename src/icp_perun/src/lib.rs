@@ -361,8 +361,13 @@ fn test_dispute_settled_refutation() {
 /// Tests that the initial state of a channel in a dispute may be under-funded,
 /// but other states must not be.
 fn test_dispute_underfunded_initial_state() {
-	let time = 0;
+	let mut time = 0;
 	let mut s = test::Setup::new(0x95, false, false);
+
+	let amount = s.state.allocation[0].clone();
+	// only fund one participant.
+	assert_eq!(s.canister.deposit(s.funding(0), amount.clone()), Ok(()));
+
 	s.state.version = 0;
 	assert_eq!(s.canister.dispute(s.params.clone(), s.sign(), time), Ok(()));
 	s.state.version = 1;
@@ -370,6 +375,19 @@ fn test_dispute_underfunded_initial_state() {
 		s.canister.dispute(s.params.clone(), s.sign(), time),
 		Err(Error::InsufficientFunding)
 	);
+
+	// Wait for the channel to be finalised.
+	time += &s.params.challenge_duration;
+	assert!(s
+		.canister
+		.channels
+		.get(&s.params.id())
+		.unwrap()
+		.settled(time));
+
+	// Withdraw the funding.
+	let (req, sig) = s.withdrawal(0, test::default_account());
+	assert_eq!(s.canister.withdraw(req, sig, time), Ok(amount.clone()));
 }
 
 #[test]
