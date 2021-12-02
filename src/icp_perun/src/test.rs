@@ -18,6 +18,12 @@ use candid::Encode;
 use ed25519_dalek::{ExpandedSecretKey, SecretKey};
 
 #[derive(Default)]
+/// Contains a canister test environment with helper functions for easier
+/// testing. Contains a canister, a set of channel participants, and a channel
+/// state (along with matching channel parameters).
+/// To test functionality, operate directly on the contained canister, and use
+/// the setup's helper functions to generate the required arguments for the
+/// canister calls.
 pub struct Setup {
 	pub parts: Vec<L2Account>,
 	pub secrets: Vec<ExpandedSecretKey>,
@@ -26,6 +32,12 @@ pub struct Setup {
 	pub state: State,
 }
 
+/// Returns a default L1 account value.
+pub fn default_account() -> L1Account {
+	L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap()
+}
+
+/// Generates a public key pair from a randomness seed and an index.
 pub fn keys(rand: u8, id: u8) -> (ExpandedSecretKey, L2Account) {
 	let hash = Hash::digest(&[rand, id, 1, 2, 3]).0;
 	let sk = SecretKey::from_bytes(&hash.as_slice()[..32]).unwrap();
@@ -35,6 +47,10 @@ pub fn keys(rand: u8, id: u8) -> (ExpandedSecretKey, L2Account) {
 }
 
 impl Setup {
+	/// Creates a randomised test setup depending on the provided randomness
+	/// seed. The `finalized` flag controls whether the generated channel state
+	/// is final. The `funded` flag controls whether the outcome of the
+	/// generated channel state should be deposited in the canister already.
 	pub fn new(rand: u8, finalized: bool, funded: bool) -> Self {
 		let mut ret = Self::default();
 		let key0 = keys(rand, 0);
@@ -65,9 +81,11 @@ impl Setup {
 		ret
 	}
 
+	/// Signs the setup's channel state for all channel participants.
 	pub fn sign(&self) -> FullySignedState {
 		self.sign_encoding(&Encode!(&self.state).unwrap())
 	}
+	/// Creates a fully signed state with invalid signatures.
 	pub fn sign_invalid(&self) -> FullySignedState {
 		self.sign_encoding(&Encode!(&"invalid state").unwrap())
 	}
@@ -77,12 +95,16 @@ impl Setup {
 		Funding::new(self.params.id(), self.parts[part].clone())
 	}
 
+	/// Creates a signed withdrawal request of the setup's channel for a given
+	/// participant and receiver.
 	pub fn withdrawal(&self, part: usize, receiver: L1Account) -> (WithdrawalRequest, L2Signature) {
 		let funding = self.funding(part);
 		let req = WithdrawalRequest::new(funding, receiver);
 		(req.clone(), self.sign_withdrawal(&req, part))
 	}
 
+	/// Manually signs a withdrawal request using the requested participant's
+	/// secret key.
 	pub fn sign_withdrawal(&self, req: &WithdrawalRequest, part: usize) -> L2Signature {
 		let enc = Encode!(req).unwrap();
 		L2Signature(
@@ -93,6 +115,8 @@ impl Setup {
 		)
 	}
 
+	/// Creates a fully signed state from the setup's state and uses the given
+	/// byte encoding to generate its signatures.
 	fn sign_encoding(&self, enc: &[u8]) -> FullySignedState {
 		let mut state = FullySignedState::default();
 		state.state = self.state.clone();

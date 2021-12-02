@@ -93,13 +93,18 @@ impl CanisterState {
 	}
 
 	/// Updates the holdings associated with a channel to the outcome of the
-	/// supplied state, then registers the state.
-	pub fn realise_outcome(&mut self, params: &Params, state: RegisteredState) {
-		for (i, outcome) in state.state.allocation.iter().enumerate() {
-			self.holdings.insert(
-				Funding::new(state.state.channel.clone(), params.participants[i].clone()),
-				outcome.clone(),
-			);
+	/// supplied state, then registers the state. If the state is the channel's
+	/// initial state, the holdings are not updated, as initial states are
+	/// allowed to be under-funded and are otherwise expected to match the
+	/// deposit distribution exactly if fully funded.
+	pub fn register_channel(&mut self, params: &Params, state: RegisteredState) {
+		if !state.state.may_be_underfunded() {
+			for (i, outcome) in state.state.allocation.iter().enumerate() {
+				self.holdings.insert(
+					Funding::new(state.state.channel.clone(), params.participants[i].clone()),
+					outcome.clone(),
+				);
+			}
 		}
 
 		self.channels.insert(state.state.channel.clone(), state);
@@ -132,7 +137,7 @@ impl CanisterState {
 
 		let funds = &self.channel_funds(&state.state.channel, &params);
 
-		self.realise_outcome(&params, RegisteredState::conclude(state, &params, funds)?);
+		self.register_channel(&params, RegisteredState::conclude(state, &params, funds)?);
 
 		Ok(())
 	}
@@ -150,7 +155,7 @@ impl CanisterState {
 
 		let funds = &self.channel_funds(&state.state.channel, &params);
 
-		self.realise_outcome(
+		self.register_channel(
 			&params,
 			RegisteredState::dispute(state, &params, funds, now)?,
 		);
@@ -176,7 +181,8 @@ impl CanisterState {
 }
 
 #[test]
-/// Tests that deposits are added
+/// Tests that repeated deposits are added correctly and that only the specified
+/// participant is credited. Also tests the `query_deposit()` method.
 fn test_deposit() {
 	let mut s = test::Setup::new(0xd4, false, false);
 
@@ -200,7 +206,7 @@ fn test_deposit() {
 }
 
 #[test]
-/// Tests the happy conclude path.
+/// Tests the happy conclude path using a final state.
 fn test_conclude() {
 	let mut s = test::Setup::new(0xb2, true, true);
 	let sstate = s.sign();
@@ -219,7 +225,7 @@ fn test_conclude_nonfinal() {
 }
 
 #[test]
-/// Tests that params match the state.
+/// Tests that the supplied params must match the state.
 fn test_conclude_invalid_params() {
 	let mut s = test::Setup::new(0x23, true, true);
 	let sstate = s.sign();
@@ -266,6 +272,8 @@ fn test_conclude_invalid_allocation() {
 }
 
 #[test]
+/// Tests that a dispute with a nonfinal state will register the state properly
+/// but not mark it as final yet.
 fn test_dispute_nonfinal() {
 	let mut s = test::Setup::new(0xd0, false, true);
 	let now = 0;
@@ -276,6 +284,8 @@ fn test_dispute_nonfinal() {
 }
 
 #[test]
+/// Tests that dispute with a final state will register the state and mark it as
+/// final.
 fn test_dispute_final() {
 	let time = 0;
 	let mut s = test::Setup::new(0xd0, true, true);
@@ -286,6 +296,8 @@ fn test_dispute_final() {
 }
 
 #[test]
+/// Tests that a newer channel state can replace an older channel state if it is
+/// not yet final.
 fn test_dispute_valid_refutation() {
 	let time = 0;
 	let mut s = test::Setup::new(0xbf, false, true);
@@ -300,6 +312,7 @@ fn test_dispute_valid_refutation() {
 }
 
 #[test]
+/// Tests that a refutation using an older state fails.
 fn test_dispute_outdated_refutation() {
 	let time = 0;
 	let version = 10;
@@ -322,6 +335,7 @@ fn test_dispute_outdated_refutation() {
 }
 
 #[test]
+/// Tests that a settled state cannot be refuted.
 fn test_dispute_settled_refutation() {
 	let time = 0;
 	let version = 10;
@@ -344,6 +358,40 @@ fn test_dispute_settled_refutation() {
 }
 
 #[test]
+/// Tests that the initial state of a channel in a dispute may be under-funded,
+/// but other states must not be.
+fn test_dispute_underfunded_initial_state() {
+	let mut time = 0;
+	let mut s = test::Setup::new(0x95, false, false);
+
+	let amount = s.state.allocation[0].clone();
+	// only fund one participant.
+	assert_eq!(s.canister.deposit(s.funding(0), amount.clone()), Ok(()));
+
+	s.state.version = 0;
+	assert_eq!(s.canister.dispute(s.params.clone(), s.sign(), time), Ok(()));
+	s.state.version = 1;
+	assert_eq!(
+		s.canister.dispute(s.params.clone(), s.sign(), time),
+		Err(Error::InsufficientFunding)
+	);
+
+	// Wait for the channel to be finalised.
+	time += &s.params.challenge_duration;
+	assert!(s
+		.canister
+		.channels
+		.get(&s.params.id())
+		.unwrap()
+		.settled(time));
+
+	// Withdraw the funding.
+	let (req, sig) = s.withdrawal(0, test::default_account());
+	assert_eq!(s.canister.withdraw(req, sig, time), Ok(amount.clone()));
+}
+
+#[test]
+/// Tests that the total deposits are properly tracked.
 fn test_holding_tracking_deposit() {
 	let s = test::Setup::new(0xd9, true, true);
 	let sum = s.state.allocation[0].clone() + s.state.allocation[1].clone();
@@ -351,19 +399,21 @@ fn test_holding_tracking_deposit() {
 }
 
 #[test]
+/// Tests that unregistered channels are counted as unfunded.
 fn test_holding_tracking_none() {
 	let s = test::Setup::new(0xd9, true, false);
 	assert_eq!(s.canister.channel_funds(&s.state.channel, &s.params), 0);
 }
 
 #[test]
+/// Tests the happy case for withdrawing funds from a settled channel. Also
+/// tests that redundant withdrawals will not withdraw any additional funds.
 fn test_withdraw() {
 	let mut s = test::Setup::new(0xab, true, true);
 	let sstate = s.sign();
 	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
 
-	let acc = L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parse account");
-	let (req, sig) = s.withdrawal(0, acc);
+	let (req, sig) = s.withdrawal(0, test::default_account());
 
 	let holdings = s.canister.query_deposit(s.funding(0)).unwrap();
 	assert_eq!(
@@ -376,19 +426,20 @@ fn test_withdraw() {
 }
 
 #[test]
+/// Tests that the signature of withdrawal requests must be valid.
 fn test_withdraw_invalid_sig() {
 	let mut s = test::Setup::new(0x28, true, true);
 	let sstate = s.sign();
 	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
 
-	let acc = L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parse account");
-	let (req, _) = s.withdrawal(0, acc);
+	let (req, _) = s.withdrawal(0, test::default_account());
 	let sig = s.sign_withdrawal(&req, 1); // sign with wrong user.
 
 	assert_eq!(s.canister.withdraw(req, sig, 0), Err(Error::Authentication));
 }
 
 #[test]
+/// Tests that the channel to be withdrawn from must be known.
 fn test_withdraw_unknown_channel() {
 	let rand = 0x53;
 	let mut s = test::Setup::new(rand, true, true);
@@ -396,8 +447,7 @@ fn test_withdraw_unknown_channel() {
 	let sstate = s.sign();
 	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
 
-	let acc = L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parse account");
-	let (mut req, _) = s.withdrawal(0, acc);
+	let (mut req, _) = s.withdrawal(0, test::default_account());
 	req.funding.channel = unknown_id;
 
 	let sig = s.sign_withdrawal(&req, 0);
@@ -406,6 +456,7 @@ fn test_withdraw_unknown_channel() {
 }
 
 #[test]
+/// Tests that the channel to be withdrawn from must be settled.
 fn test_withdraw_not_finalized() {
 	let mut s = test::Setup::new(0x59, false, true);
 	let now = 0;
@@ -418,8 +469,7 @@ fn test_withdraw_not_finalized() {
 		.unwrap()
 		.settled(now));
 
-	let acc = L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parse account");
-	let (req, sig) = s.withdrawal(0, acc);
+	let (req, sig) = s.withdrawal(0, test::default_account());
 
 	assert_eq!(s.canister.withdraw(req, sig, 0), Err(Error::NotFinalized));
 }

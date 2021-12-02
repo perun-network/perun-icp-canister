@@ -45,9 +45,9 @@ pub struct L2Signature(pub Signature);
 pub use ic_cdk::export::candid::Principal as L1Account;
 /// An amount of a currency.
 pub type Amount = Nat;
-/// Duration in seconds.
+/// Duration in nanoseconds (same as ICP timestamps).
 pub type Duration = u64;
-/// UNIX timestamp.
+/// Timestamp in nanoseconds (same as ICP timestamps).
 pub type Timestamp = u64;
 /// Unique Perun channel identifier.
 pub type ChannelId = Hash;
@@ -254,10 +254,18 @@ impl State {
 			.ok_or(Error::Authentication)
 	}
 
+	/// Calculates the total funds in a channel's state.
 	pub fn funds(&self) -> Amount {
 		self.allocation
 			.iter()
 			.fold(Amount::default(), |x, y| x + y.clone())
+	}
+
+	/// Channels that are in their initial state may not yet be fully funded,
+	/// but may be registered already for disputes. This is to retrieve funds of
+	/// channels where the funding phase does not complete.
+	pub fn may_be_underfunded(&self) -> bool {
+		self.version == 0 && !self.finalized
 	}
 }
 
@@ -276,11 +284,19 @@ impl Params {
 // FullySignedState
 
 impl FullySignedState {
+	/// Checks that a channel state is authenticated and matches the supplied
+	/// parameters and its outcome does not exceed the supplied total deposits.
 	pub fn validate(&self, params: &Params, funds: &Amount) -> CanisterResult<()> {
 		ensure!(self.state.channel == params.id(), InvalidInput);
 		ensure!(self.sigs.len() == params.participants.len(), InvalidInput);
 		ensure!(self.sigs.len() == self.state.allocation.len(), InvalidInput);
-		ensure!(funds >= &self.state.funds(), InsufficientFunding);
+		// A channel state is allowed to be under-funded if it is the initial
+		// state, as funding happens only after the initial state is signed and
+		// we want to allow withdrawals from partially funded channels that get
+		// stuck in the initial state.
+		if !self.state.may_be_underfunded() {
+			ensure!(funds >= &self.state.funds(), InsufficientFunding);
+		}
 
 		for (i, pk) in params.participants.iter().enumerate() {
 			self.state.validate_sig(&self.sigs[i], pk)?;
