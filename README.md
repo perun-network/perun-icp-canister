@@ -9,6 +9,18 @@ The canister is developed as part of the Dfinity grants program.
 It contains the on-chain logic needed to operate payment channels on the internet computer.
 In the future, it will connect to the [go-perun](https://github.com/hyperledger-labs/go-perun) client library so that applications can be written for it.
 
+## :warning: Current problems
+
+As, as of the time of this grant, to the best of our knowledge, the ICP ledger canister does not allow arbitrary canisters to send ICP or listen for received ICP, and there are no established fungible token standards yet (some promising ones are already in development, though), we have mocked all currency interactions:
+
+* `deposit()` just takes the deposited amount as a number argument, currently trusting the value to be correct.
+* `withdraw()` returns the withdrawn amount as a number, instead of actually sending any currency anywhere.
+
+In the future, we plan to add the functionality to support real currency interactions, but this is most likely out of scope for the current grant's time limit.
+
+Additionally, while the client-side logic for our channel framework is implemented, the IC adapter for the `go-perun` library is not part of this grant's scope, and we plan to connect our client library to the IC in a future follow-up grant.
+
+
 ## Protocol
 
 A channel is opened by depositing funds for it into the contract by calling *Deposit*.
