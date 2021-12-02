@@ -14,16 +14,16 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: Swatinem/rust-cache@v1
-        name: Setup Cache
-
       - uses: actions-rs/toolchain@v1
         name: Install Rust deps
         with:
           default: true
-          toolchain: 1.56.0
+          toolchain: stable
           components: rustfmt
           target: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v1
+        name: Setup Cache
 
       - uses: actions-rs/cargo@v1
         name: Format
