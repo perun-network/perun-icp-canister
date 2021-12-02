@@ -1,25 +1,37 @@
-# icp_perun
+<h1 align="center">
+    <a href="https://perun.network/"><img src=".asset/go_perun.png" alt="Perun" width="30%"></a>
+</h1>
 
-Welcome to your new icp_perun project and to the internet computer development community. By default, creating a new project adds this README and some template files to your project directory. You can edit these template files to customize your project and to include your own code to speed up the development cycle.
+# Perun ICP Canister
 
-To get started, you might want to explore the project directory structure and the default configuration file. Working with this project in your development environment will not affect any production deployment or identity tokens.
+This repository contains the Internet Computer canister for the [Perun state channel framework](https://perun.network) developed by [PolyCrypt](https://polycry.pt).
+The canister is developed as part of the Dfinity grants program.
+It contains the on-chain logic needed to operate payment channels on the internet computer.
+In the future, it will connect to the [go-perun](https://github.com/hyperledger-labs/go-perun) client library so that applications can be written for it.
 
-To learn more before you start working with icp_perun, see the following documentation available online:
+## Protocol
 
-- [Quick Start](https://sdk.dfinity.org/docs/quickstart/quickstart-intro.html)
-- [SDK Developer Tools](https://sdk.dfinity.org/docs/developers-guide/sdk-guide.html)
-- [Motoko Programming Language Guide](https://sdk.dfinity.org/docs/language-guide/motoko.html)
-- [Motoko Language Quick Reference](https://sdk.dfinity.org/docs/language-guide/language-manual.html)
-- [JavaScript API Reference](https://erxue-5aaaa-aaaab-qaagq-cai.raw.ic0.app)
+A channel is opened by depositing funds for it into the contract by calling *Deposit*.
+The participants of the channel can then do as many off-chain channel updates as they want.
+When all participants come to the conclusion that the channel should be closed, they set the final flag on the channel state, and call *Conclude*.
+All of them can then withdraw the outcome by calling *Withdraw*. 
 
-# Test & Compile
+*Dispute* is only needed if the participants do not arrive at a final channel state off-chain.
+It allows any participant to enforce the last valid state, i.e., the mutually-signed state with the highest version number.
+A dispute is initiated by calling *Dispute* with the latest available state.
+A registered state can be refuted within a specified challenge period by calling *Dispute* with a newer state.
+After the challenge period, the dispute can be concluded by calling *Conclude* and the funds can be withdrawn.
+
+![state diagram](.asset/protocol.png)
+
+## Test & Compile
 
 ```sh
 cargo test --tests
 ./build.sh
 ```
 
-# Example Walkthrough
+## Example Walkthrough
 
 We provide an example to show how to use the [ic-agent] crate to deposit funds
 into the *Perun* canister. You will need Rust `1.56` or later.
