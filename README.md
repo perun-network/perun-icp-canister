@@ -9,34 +9,38 @@ The canister is developed as part of the Dfinity grants program.
 It contains the on-chain logic needed to operate payment channels on the internet computer.
 In the future, it will connect to the [go-perun](https://github.com/hyperledger-labs/go-perun) client library so that applications can be written for it.
 
-## :warning: Current problems
+## :warning: Current Limitations
 
-As, as of the time of this grant, to the best of our knowledge, [the ICP ledger canister does not allow arbitrary canisters to send ICP or listen for received ICP](https://forum.dfinity.org/t/integrating-with-the-internet-computer-ledger/2542) (expected to be available [after this grant](https://forum.dfinity.org/t/enable-canisters-to-hold-icp/6153/113)), and there are [no established fungible token standards](https://forum.dfinity.org/t/receiving-icp-in-canister/5329/6) yet (some promising ones are [already in development](https://forum.dfinity.org/t/thoughts-on-the-token-standard/4694/94), though), we have mocked all currency interactions:
+We have mocked all token interactions because
+[the ICP ledger canister does not allow arbitrary canisters to send ICP or listen for received ICP](https://forum.dfinity.org/t/integrating-with-the-internet-computer-ledger/2542) (expected to be available [after this grant](https://forum.dfinity.org/t/enable-canisters-to-hold-icp/6153/113)), and there are [no established fungible token standards](https://forum.dfinity.org/t/receiving-icp-in-canister/5329/6) yet (some promising ones are [already in development](https://forum.dfinity.org/t/thoughts-on-the-token-standard/4694/94), though):
 
 * `deposit()` just takes the deposited amount as a number argument, currently trusting the value to be correct.
 * `withdraw()` returns the withdrawn amount as a number, instead of actually sending any currency anywhere.
 
-In the future, we plan to add the functionality to support real currency interactions, but this is most likely out of scope for the current grant's time limit.
+Once a token standard or ICP token interactions are live, the code can be easily
+adapted to work with those.
 
-Additionally, while the client-side logic for our channel framework is implemented, the IC adapter for the `go-perun` library is not part of this grant's scope, and we plan to connect our client library to the IC in a future follow-up grant.
-
-_Note: we have somewhat deviated from the exact proposed architecture of the grant application, in favor of a simpler equivalent implementation.
-The proposed architecture still followed ethereum-specific design choices from our initial backend, which are not necessary this time._
+Additionally, while the client-side logic for our channel framework is implemented, the IC adapter for the `go-perun` library is not part of this grant's scope.
 
 ## Protocol
 
-A channel is opened by depositing funds for it into the contract by calling *Deposit*.
+A payment channel is a direct peer-to-peer protocol to allow two parties to exchange assets without involvement of the blockchain, besides when _opening_ or _closing_ the channel.
+A channel is opened by depositing funds for it into the contract by calling `deposit`.
 The participants of the channel can then do as many off-chain channel updates as they want.
-When all participants come to the conclusion that the channel should be closed, they set the final flag on the channel state, and call *Conclude*.
-All of them can then withdraw the outcome by calling *Withdraw*. 
+A channel update is comprised of a new channel state together with signatures of
+all channel participants of this new state.
+Each channel state contains the balances of each user as well as a version
+counter, which is incremented by one on each update.
+When all participants come to the conclusion that the channel should be closed, they set the final flag on the channel state, and call `conclude`.
+All of them can then withdraw the concluded channel outcome by calling `withdraw`.
 
-*Dispute* is only needed if the participants do not arrive at a final channel state off-chain.
+A call to `dispute` is only needed if the participants do not arrive at a final channel state off-chain.
 It allows any participant to enforce the last valid state, i.e., the mutually-signed state with the highest version number.
-A dispute is initiated by calling *Dispute* with the latest available state.
-A registered state can be refuted within a specified challenge period by calling *Dispute* with a newer state.
-After the challenge period, the dispute can be concluded by calling *Conclude* and the funds can be withdrawn.
+A dispute is initiated by calling `dispute` with the latest available state.
+A registered state can be refuted within a specified challenge period by calling `dispute` with a newer state.
+After the challenge period, the dispute can be concluded by calling `conclude` and the funds can be withdrawn.
 
-![state diagram](.asset/protocol.png)
+![state diagram].asset/protocol.png
 
 ## Test & Compile
 
@@ -50,24 +54,24 @@ cargo test --tests
 We provide an example to show how to use the [ic-agent] crate to deposit funds
 into the *Perun* canister. You will need Rust `1.56` or later.
 
-1. Start a replica locally and deploy the *Perun* canister to it:  
+1. Start a replica locally and deploy the *Perun* canister to it:
 ```bash
 dfx start --clean
 dfx deploy # In a new terminal
 ```
 
-2. Copy the *principal ID* from the terminal which looks like this: `rrkah-fqaaa-aaaaa-aaaaq-cai`.  
+2. Copy the *principal ID* from the terminal which looks like this: `rrkah-fqaaa-aaaaa-aaaaq-cai`.
 Make sure to copy the *Perun* canister ID, **not** the UI canister ID.
 
 3. [Issue #4881 of cargo] needs to be worked around here since the example
-needs to link against the canister as native lib.  
+needs to link against the canister as native lib.
 Change the `"cdylib"` in the [Cargo.toml] to `"lib"`.
 
 4. Run the command below with the *Perun* canister ID that you copied:
 ```sh
 RUST_LOG=info cargo run --example happy_walkthrough "rrkah-fqaaa-aaaaa-aaaaq-cai"
 ```
-The output should look like this minus the comments:  
+The output should look like this minus the comments:
 ```sh
 INFO  happy_walkthrough > URL: http://localhost:8000/
 INFO  happy_walkthrough > Canister ID: rrkah-fqaaa-aaaaa-aaaaq-cai
@@ -94,3 +98,10 @@ INFO  happy_walkthrough > Querying deposit channel: 0x920c7366… for peer IDx: 
 [ic-agent]: https://crates.io/crates/ic-agent
 [Cargo.toml]: Cargo.toml
 [Issue #4881 of cargo]: https://github.com/rust-lang/cargo/issues/4881
+
+## Copyright
+
+Copyright 2021 - See [NOTICE file](NOTICE) for copyright holders.
+Use of the source code is governed by the Apache 2.0 license that can be found in the [LICENSE file](LICENSE).
+
+Contact us at [info@perun.network](mailto:info@perun.network).
