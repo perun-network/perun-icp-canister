@@ -11,7 +11,7 @@ In the future, it will connect to the [go-perun](https://github.com/hyperledger-
 
 ## :warning: Current problems
 
-As, as of the time of this grant, to the best of our knowledge, the ICP ledger canister does not allow arbitrary canisters to send ICP or listen for received ICP, and there are no established fungible token standards yet (some promising ones are already in development, though), we have mocked all currency interactions:
+As, as of the time of this grant, to the best of our knowledge, [the ICP ledger canister does not allow arbitrary canisters to send ICP or listen for received ICP](https://forum.dfinity.org/t/integrating-with-the-internet-computer-ledger/2542) (expected to be available [after this grant](https://forum.dfinity.org/t/enable-canisters-to-hold-icp/6153/113)), and there are [no established fungible token standards](https://forum.dfinity.org/t/receiving-icp-in-canister/5329/6) yet (some promising ones are [already in development](https://forum.dfinity.org/t/thoughts-on-the-token-standard/4694/94), though), we have mocked all currency interactions:
 
 * `deposit()` just takes the deposited amount as a number argument, currently trusting the value to be correct.
 * `withdraw()` returns the withdrawn amount as a number, instead of actually sending any currency anywhere.
@@ -19,7 +19,6 @@ As, as of the time of this grant, to the best of our knowledge, the ICP ledger c
 In the future, we plan to add the functionality to support real currency interactions, but this is most likely out of scope for the current grant's time limit.
 
 Additionally, while the client-side logic for our channel framework is implemented, the IC adapter for the `go-perun` library is not part of this grant's scope, and we plan to connect our client library to the IC in a future follow-up grant.
-
 
 ## Protocol
 
