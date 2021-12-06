@@ -20,6 +20,9 @@ In the future, we plan to add the functionality to support real currency interac
 
 Additionally, while the client-side logic for our channel framework is implemented, the IC adapter for the `go-perun` library is not part of this grant's scope, and we plan to connect our client library to the IC in a future follow-up grant.
 
+_Note: we have somewhat deviated from the exact proposed architecture of the grant application, in favor of a simpler equivalent implementation.
+The proposed architecture still followed ethereum-specific design choices from our initial backend, which are not necessary this time._
+
 ## Protocol
 
 A channel is opened by depositing funds for it into the contract by calling *Deposit*.
