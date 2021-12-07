@@ -40,7 +40,7 @@ A dispute is initiated by calling `dispute` with the latest available state.
 A registered state can be refuted within a specified challenge period by calling `dispute` with a newer state.
 After the challenge period, the dispute can be concluded by calling `conclude` and the funds can be withdrawn.
 
-![state diagram].asset/protocol.png
+![state diagram](.asset/protocol.png)
 
 ## Test & Compile
 
