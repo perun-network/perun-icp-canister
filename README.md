@@ -49,6 +49,10 @@ cargo test --tests
 ./build.sh
 ```
 
+You need to have the `wasm32-unknown-unknown` target installed, or the second
+build command will fail. You can install it by running
+`rustup target add wasm32-unknown-unknown`.
+
 ## Example Walkthrough
 
 We provide an example to show how to use the [ic-agent] crate to deposit funds
