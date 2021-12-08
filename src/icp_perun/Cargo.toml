@@ -5,8 +5,8 @@ authors = ["PolyCrypt GmbH <info@polycry.pt>"]
 edition = "2021"
 license = "Apache-2.0"
 homepage = "https://polycry.pt/"
-keywords = ["blockchain", "channel", "perun"]
-description = "Dfinity Canister for Perun State Channels"
+keywords = ["blockchain", "icp", "channels", "perun"]
+description = "Dfinity ICP Canister for Perun Payment Channels"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
