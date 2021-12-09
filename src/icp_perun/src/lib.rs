@@ -86,7 +86,7 @@ fn query_deposit(funding: Funding) -> Option<Amount> {
 /// Returns the latest registered state for a given channel and its dispute
 /// timeout. This function should be used to check for registered disputes.
 fn query_state(id: ChannelId) -> Option<RegisteredState> {
-	STATE.with(|s| s.borrow().channels.get(&id).cloned())
+	STATE.with(|s| s.borrow().state(&id))
 }
 
 impl CanisterState {
@@ -97,6 +97,11 @@ impl CanisterState {
 
 	pub fn query_deposit(&self, funding: Funding) -> Option<Amount> {
 		self.holdings.get(&funding).cloned()
+	}
+
+	/// Queries a registered state.
+	pub fn state(&self, id: &ChannelId) -> Option<RegisteredState> {
+		self.channels.get(&id).cloned()
 	}
 
 	/// Updates the holdings associated with a channel to the outcome of the
@@ -148,7 +153,7 @@ impl CanisterState {
 		state: FullySignedState,
 		now: Timestamp,
 	) -> Result<()> {
-		if let Some(old_state) = self.channels.get(&state.state.channel) {
+		if let Some(old_state) = self.state(&state.state.channel) {
 			require!(!old_state.settled(now), AlreadyConcluded);
 		}
 
@@ -161,7 +166,7 @@ impl CanisterState {
 		state: FullySignedState,
 		now: Timestamp,
 	) -> Result<()> {
-		if let Some(old_state) = self.channels.get(&state.state.channel) {
+		if let Some(old_state) = self.state(&state.state.channel) {
 			require!(!old_state.settled(now), AlreadyConcluded);
 			require!(old_state.state.version < state.state.version, OutdatedState);
 		}
@@ -176,7 +181,7 @@ impl CanisterState {
 		now: Timestamp,
 	) -> Result<Amount> {
 		req.validate_sig(&auth)?;
-		match self.channels.get(&req.funding.channel) {
+		match self.state(&req.funding.channel) {
 			None => Err(Error::NotFinalized),
 			Some(state) => {
 				require!(state.settled(now), NotFinalized);
@@ -289,7 +294,7 @@ fn test_dispute_nonfinal() {
 	let channel = s.params.id();
 	let sstate = s.sign();
 	assert_eq!(s.canister.dispute(s.params, sstate, now), Ok(()));
-	assert!(!s.canister.channels.get(&channel).unwrap().settled(now));
+	assert!(!s.canister.state(&channel).unwrap().settled(now));
 }
 
 #[test]
@@ -301,7 +306,7 @@ fn test_dispute_final() {
 	let channel = s.params.id();
 	let sstate = s.sign();
 	assert_eq!(s.canister.dispute(s.params, sstate, time), Ok(()));
-	assert!(s.canister.channels.get(&channel).unwrap().settled(time));
+	assert!(s.canister.state(&channel).unwrap().settled(time));
 }
 
 #[test]
@@ -317,7 +322,7 @@ fn test_dispute_valid_refutation() {
 	s.state.finalized = true;
 	sstate = s.sign();
 	assert_eq!(s.canister.dispute(s.params, sstate, time), Ok(()));
-	assert!(s.canister.channels.get(&channel).unwrap().settled(time));
+	assert!(s.canister.state(&channel).unwrap().settled(time));
 }
 
 #[test]
@@ -336,11 +341,8 @@ fn test_dispute_outdated_refutation() {
 		s.canister.dispute(s.params, sstate, time),
 		Err(Error::OutdatedState)
 	);
-	assert!(!s.canister.channels.get(&channel).unwrap().settled(time));
-	assert_eq!(
-		s.canister.channels.get(&channel).unwrap().state.version,
-		version
-	);
+	assert!(!s.canister.state(&channel).unwrap().settled(time));
+	assert_eq!(s.canister.state(&channel).unwrap().state.version, version);
 }
 
 #[test]
@@ -359,11 +361,8 @@ fn test_dispute_settled_refutation() {
 		s.canister.dispute(s.params, sstate, time),
 		Err(Error::AlreadyConcluded)
 	);
-	assert!(s.canister.channels.get(&channel).unwrap().settled(time));
-	assert_eq!(
-		s.canister.channels.get(&channel).unwrap().state.version,
-		version
-	);
+	assert!(s.canister.state(&channel).unwrap().settled(time));
+	assert_eq!(s.canister.state(&channel).unwrap().state.version, version);
 }
 
 #[test]
