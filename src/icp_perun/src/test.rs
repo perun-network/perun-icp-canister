@@ -68,12 +68,9 @@ impl Setup {
 		ret.state.finalized = finalized;
 
 		if funded {
-			for (i, pk) in ret.parts.iter().enumerate() {
+			for (i, _) in ret.parts.iter().enumerate() {
 				ret.canister
-					.deposit(
-						Funding::new(ret.state.channel.clone(), pk.clone()),
-						ret.state.allocation[i].clone(),
-					)
+					.deposit(ret.funding(i), ret.state.allocation[i].clone())
 					.unwrap();
 			}
 		}
