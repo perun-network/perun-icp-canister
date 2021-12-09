@@ -78,8 +78,8 @@ fn withdraw(request: WithdrawalRequest, auth: L2Signature) -> (Option<Amount>, O
 /// Returns the funds deposited for a channel's specified participant, if any.
 /// this function should be used to check whether all participants have
 /// deposited their owed funds into a channel to ensure it is fully funded.
-fn query_deposit(funding: Funding) -> Option<Amount> {
-	STATE.with(|s| s.borrow().query_deposit(funding))
+fn query_holdings(funding: Funding) -> Option<Amount> {
+	STATE.with(|s| s.borrow().query_holdings(funding))
 }
 
 #[ic_cdk_macros::query]
@@ -95,7 +95,7 @@ impl CanisterState {
 		Ok(())
 	}
 
-	pub fn query_deposit(&self, funding: Funding) -> Option<Amount> {
+	pub fn query_holdings(&self, funding: Funding) -> Option<Amount> {
 		self.holdings.get(&funding).cloned()
 	}
 
@@ -193,30 +193,30 @@ impl CanisterState {
 
 #[test]
 /// Tests that repeated deposits are added correctly and that only the specified
-/// participant is credited. Also tests the `query_deposit()` method.
+/// participant is credited. Also tests the `query_holdings()` method.
 fn test_deposit() {
 	let mut s = test::Setup::new(0xd4, false, false);
 
 	let funding = Funding::new(s.params.id(), s.parts[0].clone());
 	let funding2 = Funding::new(s.params.id(), s.parts[1].clone());
 	// No deposits yet.
-	assert_eq!(s.canister.query_deposit(funding.clone()), None);
-	assert_eq!(s.canister.query_deposit(funding2.clone()), None);
+	assert_eq!(s.canister.query_holdings(funding.clone()), None);
+	assert_eq!(s.canister.query_holdings(funding2.clone()), None);
 	// Deposit 10.
 	assert_eq!(s.canister.deposit(funding.clone(), 10.into()), Ok(()));
 	// Now 10.
-	assert_eq!(s.canister.query_deposit(funding.clone()), Some(10.into()));
-	assert_eq!(s.canister.query_deposit(funding2.clone()), None);
+	assert_eq!(s.canister.query_holdings(funding.clone()), Some(10.into()));
+	assert_eq!(s.canister.query_holdings(funding2.clone()), None);
 	// Deposit 20.
-	assert_eq!(s.canister.query_deposit(funding2.clone()), None);
+	assert_eq!(s.canister.query_holdings(funding2.clone()), None);
 	assert_eq!(s.canister.deposit(funding.clone(), 20.into()), Ok(()));
 	// Now 30.
-	assert_eq!(s.canister.query_deposit(funding.clone()), Some(30.into()));
-	assert_eq!(s.canister.query_deposit(funding2.clone()), None);
+	assert_eq!(s.canister.query_holdings(funding.clone()), Some(30.into()));
+	assert_eq!(s.canister.query_holdings(funding2.clone()), None);
 	// Deposit 45 to second party.
 	assert_eq!(s.canister.deposit(funding2.clone(), 45.into()), Ok(()));
-	assert_eq!(s.canister.query_deposit(funding), Some(30.into()));
-	assert_eq!(s.canister.query_deposit(funding2), Some(45.into()));
+	assert_eq!(s.canister.query_holdings(funding), Some(30.into()));
+	assert_eq!(s.canister.query_holdings(funding2), Some(45.into()));
 }
 
 #[test]
@@ -429,7 +429,7 @@ fn test_withdraw() {
 
 	let (req, sig) = s.withdrawal(0, test::default_account());
 
-	let holdings = s.canister.query_deposit(s.funding(0)).unwrap();
+	let holdings = s.canister.query_holdings(s.funding(0)).unwrap();
 	assert_eq!(
 		s.canister.withdraw(req.clone(), sig.clone(), 0),
 		Ok(holdings)

@@ -51,15 +51,15 @@ async fn walkthrough(cid: Principal, url: String) -> Result<(), Error> {
 	let (alice, bob) = (0, 1);
 
 	// Query on-chain balances.
-	demo.query_deposit(alice).await?;
-	demo.query_deposit(bob).await?;
+	demo.query_holdings(alice).await?;
+	demo.query_holdings(bob).await?;
 	// Deposit for Alice and Bob.
 	demo.deposit(&demo.setup.state.allocation[alice], alice)
 		.await?;
 	demo.deposit(&demo.setup.state.allocation[bob], bob).await?;
 	// Query on-chain balances.
-	demo.query_deposit(alice).await?;
-	demo.query_deposit(bob).await?;
+	demo.query_holdings(alice).await?;
+	demo.query_holdings(bob).await?;
 	// Update off-chain balances.
 	demo.setup.state.allocation.swap(alice, bob);
 	// Conclude the channel.
@@ -68,8 +68,8 @@ async fn walkthrough(cid: Principal, url: String) -> Result<(), Error> {
 	demo.withdraw(alice).await?;
 	demo.withdraw(bob).await?;
 	// Query on-chain balances.
-	demo.query_deposit(alice).await?;
-	demo.query_deposit(bob).await?;
+	demo.query_holdings(alice).await?;
+	demo.query_holdings(bob).await?;
 
 	Ok(())
 }
@@ -108,11 +108,11 @@ impl Demo {
 		Ok(())
 	}
 
-	async fn query_deposit(&self, part: usize) -> Result<(), Error> {
+	async fn query_holdings(&self, part: usize) -> Result<(), Error> {
 		let fid = self.setup.funding(part);
 		let response = self
 			.agent
-			.query(&self.canister, "query_deposit")
+			.query(&self.canister, "query_holdings")
 			.with_arg(Encode!(&fid).unwrap())
 			.call()
 			.await?;
