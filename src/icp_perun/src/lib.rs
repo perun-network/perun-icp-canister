@@ -223,7 +223,7 @@ fn test_deposit() {
 /// Tests the happy conclude path using a final state.
 fn test_conclude() {
 	let mut s = test::Setup::new(0xb2, true, true);
-	let sstate = s.sign();
+	let sstate = s.sign_state();
 	assert_eq!(s.canister.conclude(s.params, sstate, 0), Ok(()));
 }
 
@@ -231,7 +231,7 @@ fn test_conclude() {
 /// Tests that nonfinal channels cannot be concluded.
 fn test_conclude_nonfinal() {
 	let mut s = test::Setup::new(0x1b, false, true);
-	let sstate = s.sign();
+	let sstate = s.sign_state();
 	assert_eq!(
 		s.canister.conclude(s.params, sstate, 0),
 		Err(Error::NotFinalized)
@@ -242,7 +242,7 @@ fn test_conclude_nonfinal() {
 /// Tests that the supplied params must match the state.
 fn test_conclude_invalid_params() {
 	let mut s = test::Setup::new(0x23, true, true);
-	let sstate = s.sign();
+	let sstate = s.sign_state();
 	s.params.challenge_duration += 1;
 	assert_eq!(
 		s.canister.conclude(s.params, sstate, 0),
@@ -254,7 +254,7 @@ fn test_conclude_invalid_params() {
 /// Tests that only signed channels can be concluded.
 fn test_conclude_not_signed() {
 	let mut s = test::Setup::new(0xeb, true, true);
-	let sstate = s.sign_invalid();
+	let sstate = s.sign_state_invalid();
 	assert_eq!(
 		s.canister.conclude(s.params, sstate, 0),
 		Err(Error::Authentication)
@@ -266,7 +266,7 @@ fn test_conclude_not_signed() {
 fn test_conclude_insufficient_funds() {
 	let mut s = test::Setup::new(0xeb, true, true);
 	s.state.allocation[0] += 1000;
-	let sstate = s.sign();
+	let sstate = s.sign_state();
 	assert_eq!(
 		s.canister.conclude(s.params, sstate, 0),
 		Err(Error::InsufficientFunding)
@@ -278,7 +278,7 @@ fn test_conclude_insufficient_funds() {
 fn test_conclude_invalid_allocation() {
 	let mut s = test::Setup::new(0xfa, true, true);
 	s.state.allocation.push(5.into());
-	let signed = s.sign();
+	let signed = s.sign_state();
 	assert_eq!(
 		s.canister.conclude(s.params, signed, 0),
 		Err(Error::InvalidInput)
@@ -292,7 +292,7 @@ fn test_dispute_nonfinal() {
 	let mut s = test::Setup::new(0xd0, false, true);
 	let now = 0;
 	let channel = s.params.id();
-	let sstate = s.sign();
+	let sstate = s.sign_state();
 	assert_eq!(s.canister.dispute(s.params, sstate, now), Ok(()));
 	assert!(!s.canister.state(&channel).unwrap().settled(now));
 }
@@ -304,7 +304,7 @@ fn test_dispute_final() {
 	let time = 0;
 	let mut s = test::Setup::new(0xd0, true, true);
 	let channel = s.params.id();
-	let sstate = s.sign();
+	let sstate = s.sign_state();
 	assert_eq!(s.canister.dispute(s.params, sstate, time), Ok(()));
 	assert!(s.canister.state(&channel).unwrap().settled(time));
 }
@@ -316,11 +316,11 @@ fn test_dispute_valid_refutation() {
 	let time = 0;
 	let mut s = test::Setup::new(0xbf, false, true);
 	let channel = s.params.id();
-	let mut sstate = s.sign();
+	let mut sstate = s.sign_state();
 	assert_eq!(s.canister.dispute(s.params.clone(), sstate, time), Ok(()));
 	s.state.version += 1;
 	s.state.finalized = true;
-	sstate = s.sign();
+	sstate = s.sign_state();
 	assert_eq!(s.canister.dispute(s.params, sstate, time), Ok(()));
 	assert!(s.canister.state(&channel).unwrap().settled(time));
 }
@@ -333,10 +333,10 @@ fn test_dispute_outdated_refutation() {
 	let mut s = test::Setup::new(0x21, false, true);
 	let channel = s.params.id();
 	s.state.version = version;
-	let mut sstate = s.sign();
+	let mut sstate = s.sign_state();
 	assert_eq!(s.canister.dispute(s.params.clone(), sstate, time), Ok(()));
 	s.state.version -= 1;
-	sstate = s.sign();
+	sstate = s.sign_state();
 	assert_eq!(
 		s.canister.dispute(s.params, sstate, time),
 		Err(Error::OutdatedState)
@@ -353,10 +353,10 @@ fn test_dispute_settled_refutation() {
 	let mut s = test::Setup::new(0x21, true, true);
 	let channel = s.params.id();
 	s.state.version = version;
-	let mut sstate = s.sign();
+	let mut sstate = s.sign_state();
 	assert_eq!(s.canister.conclude(s.params.clone(), sstate, time), Ok(()));
 	s.state.version += 1;
-	sstate = s.sign();
+	sstate = s.sign_state();
 	assert_eq!(
 		s.canister.dispute(s.params, sstate, time),
 		Err(Error::AlreadyConcluded)
@@ -377,10 +377,13 @@ fn test_dispute_underfunded_initial_state() {
 	assert_eq!(s.canister.deposit(s.funding(0), amount.clone()), Ok(()));
 
 	s.state.version = 0;
-	assert_eq!(s.canister.dispute(s.params.clone(), s.sign(), time), Ok(()));
+	assert_eq!(
+		s.canister.dispute(s.params.clone(), s.sign_state(), time),
+		Ok(())
+	);
 	s.state.version = 1;
 	assert_eq!(
-		s.canister.dispute(s.params.clone(), s.sign(), time),
+		s.canister.dispute(s.params.clone(), s.sign_state(), time),
 		Err(Error::InsufficientFunding)
 	);
 
@@ -421,7 +424,7 @@ fn test_holding_tracking_none() {
 /// tests that redundant withdrawals will not withdraw any additional funds.
 fn test_withdraw() {
 	let mut s = test::Setup::new(0xab, true, true);
-	let sstate = s.sign();
+	let sstate = s.sign_state();
 	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
 
 	let (req, sig) = s.withdrawal(0, test::default_account());
@@ -440,7 +443,7 @@ fn test_withdraw() {
 /// Tests that the signature of withdrawal requests must be valid.
 fn test_withdraw_invalid_sig() {
 	let mut s = test::Setup::new(0x28, true, true);
-	let sstate = s.sign();
+	let sstate = s.sign_state();
 	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
 
 	let (req, _) = s.withdrawal(0, test::default_account());
@@ -455,7 +458,7 @@ fn test_withdraw_unknown_channel() {
 	let rand = 0x53;
 	let mut s = test::Setup::new(rand, true, true);
 	let unknown_id = test::Setup::new(rand + 1, false, false).params.id();
-	let sstate = s.sign();
+	let sstate = s.sign_state();
 	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
 
 	let (mut req, _) = s.withdrawal(0, test::default_account());
@@ -471,7 +474,7 @@ fn test_withdraw_unknown_channel() {
 fn test_withdraw_not_finalized() {
 	let mut s = test::Setup::new(0x59, false, true);
 	let now = 0;
-	let sstate = s.sign();
+	let sstate = s.sign_state();
 	assert_eq!(s.canister.dispute(s.params.clone(), sstate, now), Ok(()));
 	assert!(!s
 		.canister
