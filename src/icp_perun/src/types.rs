@@ -275,10 +275,6 @@ impl Params {
 	pub fn id(&self) -> ChannelId {
 		Hash::digest(&Encode!(self).unwrap())
 	}
-
-	pub fn matches(&self, state: &State) -> bool {
-		self.id() == state.channel && self.participants.len() == state.allocation.len()
-	}
 }
 
 // FullySignedState
