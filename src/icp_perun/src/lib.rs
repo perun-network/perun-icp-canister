@@ -82,6 +82,13 @@ fn query_deposit(funding: Funding) -> Option<Amount> {
 	STATE.with(|s| s.borrow().query_deposit(funding))
 }
 
+#[ic_cdk_macros::query]
+/// Returns the latest registered state for a given channel and its dispute
+/// timeout. This function should be used to check for registered disputes.
+fn query_state(id: ChannelId) -> Option<RegisteredState> {
+	STATE.with(|s| s.borrow().channels.get(&id).cloned())
+}
+
 impl CanisterState {
 	pub fn deposit(&mut self, funding: Funding, amount: Amount) -> Result<()> {
 		*self.holdings.entry(funding).or_insert(Default::default()) += amount;

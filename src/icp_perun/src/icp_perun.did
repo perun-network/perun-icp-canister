@@ -46,10 +46,16 @@ type WithdrawalRequest = record {
 	receiver: principal;
 };
 
+type RegisteredState = record {
+	state: State;
+	timeout: Timestamp;
+};
+
 service : {
 	"deposit": (Funding, Amount) -> (opt Error);
 	"query_deposit": (Funding) -> (opt Amount) query;
 	"conclude": (Params, FullySignedState) -> (opt Error);
 	"dispute": (Params, FullySignedState) -> (opt Error);
+	"query_state": (ChannelId) -> (opt RegisteredState);
 	"withdraw": (WithdrawalRequest, blob) -> (opt Amount, opt Error);
 }
