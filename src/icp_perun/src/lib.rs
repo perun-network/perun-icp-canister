@@ -18,6 +18,7 @@ pub mod error;
 pub mod test;
 pub mod types;
 
+use assert::assert_ok;
 use error::*;
 use ic_cdk::api::time as blocktime;
 use types::*;
@@ -203,18 +204,18 @@ fn test_deposit() {
 	assert_eq!(s.canister.query_holdings(funding.clone()), None);
 	assert_eq!(s.canister.query_holdings(funding2.clone()), None);
 	// Deposit 10.
-	assert_eq!(s.canister.deposit(funding.clone(), 10.into()), Ok(()));
+	assert_ok!(s.canister.deposit(funding.clone(), 10.into()));
 	// Now 10.
 	assert_eq!(s.canister.query_holdings(funding.clone()), Some(10.into()));
 	assert_eq!(s.canister.query_holdings(funding2.clone()), None);
 	// Deposit 20.
 	assert_eq!(s.canister.query_holdings(funding2.clone()), None);
-	assert_eq!(s.canister.deposit(funding.clone(), 20.into()), Ok(()));
+	assert_ok!(s.canister.deposit(funding.clone(), 20.into()));
 	// Now 30.
 	assert_eq!(s.canister.query_holdings(funding.clone()), Some(30.into()));
 	assert_eq!(s.canister.query_holdings(funding2.clone()), None);
 	// Deposit 45 to second party.
-	assert_eq!(s.canister.deposit(funding2.clone(), 45.into()), Ok(()));
+	assert_ok!(s.canister.deposit(funding2.clone(), 45.into()));
 	assert_eq!(s.canister.query_holdings(funding), Some(30.into()));
 	assert_eq!(s.canister.query_holdings(funding2), Some(45.into()));
 }
@@ -224,7 +225,7 @@ fn test_deposit() {
 fn test_conclude() {
 	let mut s = test::Setup::new(0xb2, true, true);
 	let sstate = s.sign_state();
-	assert_eq!(s.canister.conclude(s.params, sstate, 0), Ok(()));
+	assert_ok!(s.canister.conclude(s.params, sstate, 0));
 }
 
 #[test]
@@ -293,7 +294,7 @@ fn test_dispute_nonfinal() {
 	let now = 0;
 	let channel = s.params.id();
 	let sstate = s.sign_state();
-	assert_eq!(s.canister.dispute(s.params, sstate, now), Ok(()));
+	assert_ok!(s.canister.dispute(s.params, sstate, now));
 	assert!(!s.canister.state(&channel).unwrap().settled(now));
 }
 
@@ -305,7 +306,7 @@ fn test_dispute_final() {
 	let mut s = test::Setup::new(0xd0, true, true);
 	let channel = s.params.id();
 	let sstate = s.sign_state();
-	assert_eq!(s.canister.dispute(s.params, sstate, time), Ok(()));
+	assert_ok!(s.canister.dispute(s.params, sstate, time));
 	assert!(s.canister.state(&channel).unwrap().settled(time));
 }
 
@@ -317,11 +318,11 @@ fn test_dispute_valid_refutation() {
 	let mut s = test::Setup::new(0xbf, false, true);
 	let channel = s.params.id();
 	let mut sstate = s.sign_state();
-	assert_eq!(s.canister.dispute(s.params.clone(), sstate, time), Ok(()));
+	assert_ok!(s.canister.dispute(s.params.clone(), sstate, time));
 	s.state.version += 1;
 	s.state.finalized = true;
 	sstate = s.sign_state();
-	assert_eq!(s.canister.dispute(s.params, sstate, time), Ok(()));
+	assert_ok!(s.canister.dispute(s.params, sstate, time));
 	assert!(s.canister.state(&channel).unwrap().settled(time));
 }
 
@@ -334,7 +335,7 @@ fn test_dispute_outdated_refutation() {
 	let channel = s.params.id();
 	s.state.version = version;
 	let mut sstate = s.sign_state();
-	assert_eq!(s.canister.dispute(s.params.clone(), sstate, time), Ok(()));
+	assert_ok!(s.canister.dispute(s.params.clone(), sstate, time));
 	s.state.version -= 1;
 	sstate = s.sign_state();
 	assert_eq!(
@@ -354,7 +355,7 @@ fn test_dispute_settled_refutation() {
 	let channel = s.params.id();
 	s.state.version = version;
 	let mut sstate = s.sign_state();
-	assert_eq!(s.canister.conclude(s.params.clone(), sstate, time), Ok(()));
+	assert_ok!(s.canister.conclude(s.params.clone(), sstate, time));
 	s.state.version += 1;
 	sstate = s.sign_state();
 	assert_eq!(
@@ -374,7 +375,7 @@ fn test_dispute_underfunded_initial_state() {
 
 	let amount = s.state.allocation[0].clone();
 	// only fund one participant.
-	assert_eq!(s.canister.deposit(s.funding(0), amount.clone()), Ok(()));
+	assert_ok!(s.canister.deposit(s.funding(0), amount.clone()));
 
 	s.state.version = 0;
 	assert_eq!(
@@ -425,7 +426,7 @@ fn test_holding_tracking_none() {
 fn test_withdraw() {
 	let mut s = test::Setup::new(0xab, true, true);
 	let sstate = s.sign_state();
-	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
+	assert_ok!(s.canister.conclude(s.params.clone(), sstate, 0));
 
 	let (req, sig) = s.withdrawal(0, test::default_account());
 
@@ -444,7 +445,7 @@ fn test_withdraw() {
 fn test_withdraw_invalid_sig() {
 	let mut s = test::Setup::new(0x28, true, true);
 	let sstate = s.sign_state();
-	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
+	assert_ok!(s.canister.conclude(s.params.clone(), sstate, 0));
 
 	let (req, _) = s.withdrawal(0, test::default_account());
 	let sig = s.sign_withdrawal(&req, 1); // sign with wrong user.
@@ -459,7 +460,7 @@ fn test_withdraw_unknown_channel() {
 	let mut s = test::Setup::new(rand, true, true);
 	let unknown_id = test::Setup::new(rand + 1, false, false).params.id();
 	let sstate = s.sign_state();
-	assert_eq!(s.canister.conclude(s.params.clone(), sstate, 0), Ok(()));
+	assert_ok!(s.canister.conclude(s.params.clone(), sstate, 0));
 
 	let (mut req, _) = s.withdrawal(0, test::default_account());
 	req.funding.channel = unknown_id;
@@ -475,7 +476,7 @@ fn test_withdraw_not_finalized() {
 	let mut s = test::Setup::new(0x59, false, true);
 	let now = 0;
 	let sstate = s.sign_state();
-	assert_eq!(s.canister.dispute(s.params.clone(), sstate, now), Ok(()));
+	assert_ok!(s.canister.dispute(s.params.clone(), sstate, now));
 	assert!(!s
 		.canister
 		.channels

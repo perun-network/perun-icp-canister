@@ -33,6 +33,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "assert"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6ad2cfc66932f8ceee708631eaaf7131d189a2a68610269a6f65b433dd8c844"
+
+[[package]]
 name = "async-trait"
 version = "0.1.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -725,6 +731,7 @@ dependencies = [
 name = "icp-perun"
 version = "0.1.0"
 dependencies = [
+ "assert",
  "candid",
  "digest",
  "ed25519-dalek",
