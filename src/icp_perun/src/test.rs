@@ -79,11 +79,11 @@ impl Setup {
 	}
 
 	/// Signs the setup's channel state for all channel participants.
-	pub fn sign(&self) -> FullySignedState {
+	pub fn sign_state(&self) -> FullySignedState {
 		self.sign_encoding(&Encode!(&self.state).unwrap())
 	}
 	/// Creates a fully signed state with invalid signatures.
-	pub fn sign_invalid(&self) -> FullySignedState {
+	pub fn sign_state_invalid(&self) -> FullySignedState {
 		self.sign_encoding(&Encode!(&"invalid state").unwrap())
 	}
 
