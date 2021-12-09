@@ -87,7 +87,7 @@ impl Demo {
 			.build();
 
 		Ok(Self {
-			setup: test::Setup::new(123, finalized, false),
+			setup: test::Setup::new(finalized, false),
 			agent,
 			canister,
 			delay,
@@ -128,7 +128,7 @@ impl Demo {
 
 	async fn conclude(&self) -> Result<(), Error> {
 		info!("Concluding       channel: {}", self.setup.params.id());
-		let sig_state = self.setup.sign();
+		let sig_state = self.setup.sign_state();
 		self.agent
 			.update(&self.canister, "conclude")
 			.with_arg(encode_args((&self.setup.params, &sig_state)).unwrap())
@@ -144,7 +144,7 @@ impl Demo {
 			part
 		);
 		// Use the Canister ID here as receiver since the funds are currently mocked.
-		let (req, auth) = self.setup.withdrawal(part, self.canister);
+		let (req, auth) = self.setup.withdrawal_to(part, self.canister);
 		self.agent
 			.update(&self.canister, "withdraw")
 			.with_arg(encode_args((&req, &auth)).unwrap())

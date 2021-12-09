@@ -14,8 +14,10 @@
 
 use crate::types::*;
 use crate::CanisterState;
+use std::cell::RefCell;
 use candid::Encode;
 use ed25519_dalek::{ExpandedSecretKey, SecretKey};
+use oorandom::Rand64 as Prng;
 
 #[derive(Default)]
 /// Contains a canister test environment with helper functions for easier
@@ -38,32 +40,52 @@ pub fn default_account() -> L1Account {
 }
 
 /// Generates a public key pair from a randomness seed and an index.
-fn keys(rand: u8, id: u8) -> (ExpandedSecretKey, L2Account) {
-	let hash = Hash::digest(&[rand, id, 1, 2, 3]).0;
+fn keys(rand: &mut Prng, id: u8) -> (ExpandedSecretKey, L2Account) {
+	let hash = Hash::digest(&[(rand.rand_u64() & 255) as u8, id, 1, 2, 3]).0;
 	let sk = SecretKey::from_bytes(&hash.as_slice()[..32]).unwrap();
 	let esk = ExpandedSecretKey::from(&sk);
 	let pk = L2Account((&sk).into());
 	(esk, pk)
 }
 
+thread_local! {
+	static SEED: RefCell<u128> = Default::default();
+}
+
+fn seed() -> u128 {
+	SEED.with(|s| {
+		*s.borrow_mut() += 1;
+		*s.borrow()
+	})
+}
+
 impl Setup {
+	pub fn new(finalized: bool, funded: bool) -> Self {
+		Self::with_rng(&mut Prng::new(seed()), finalized, funded)
+	}
+
 	/// Creates a randomised test setup depending on the provided randomness
 	/// seed. The `finalized` flag controls whether the generated channel state
 	/// is final. The `funded` flag controls whether the outcome of the
 	/// generated channel state should be deposited in the canister already.
-	pub fn new(rand: u8, finalized: bool, funded: bool) -> Self {
+	pub fn with_rng(rand: &mut Prng, finalized: bool, funded: bool) -> Self {
 		let mut ret = Self::default();
 		let key0 = keys(rand, 0);
 		let key1 = keys(rand, 1);
 		ret.parts = vec![key0.1, key1.1];
 		ret.secrets = vec![key0.0, key1.0];
 
-		ret.params.nonce = Hash::digest(&[rand, 0]);
+		let mut bytes: [u8; 2] = Default::default();
+		let n = rand.rand_u64();
+		bytes[0] = (n & 255) as u8;
+		bytes[1] = ((n >> 8) & 255) as u8;
+
+		ret.params.nonce = Hash::digest(&bytes);
 		ret.params.participants = ret.parts.clone();
 		ret.params.challenge_duration = 1;
 
 		ret.state.channel = ret.params.id();
-		ret.state.version = (rand as u64) * 123;
+		ret.state.version = rand.rand_u64();
 		ret.state.allocation = vec![ret.params.nonce.0[0].into(), ret.params.nonce.0[1].into()];
 		ret.state.finalized = finalized;
 
