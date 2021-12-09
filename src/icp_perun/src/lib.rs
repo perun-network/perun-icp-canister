@@ -104,17 +104,27 @@ impl CanisterState {
 	/// initial state, the holdings are not updated, as initial states are
 	/// allowed to be under-funded and are otherwise expected to match the
 	/// deposit distribution exactly if fully funded.
-	pub fn register_channel(&mut self, params: &Params, state: RegisteredState) {
-		if !state.state.may_be_underfunded() {
-			for (i, outcome) in state.state.allocation.iter().enumerate() {
-				self.holdings.insert(
-					Funding::new(state.state.channel.clone(), params.participants[i].clone()),
-					outcome.clone(),
-				);
-			}
+	pub fn register_channel(&mut self, params: &Params, state: RegisteredState) -> Result<()> {
+		let deposits = &self.channel_funds(&state.state.channel, &params);
+		if deposits < &state.state.funds() {
+			require!(state.state.may_be_underfunded(), InsufficientFunding);
+		} else {
+			self.update_holdings(&params, &state.state);
 		}
 
 		self.channels.insert(state.state.channel.clone(), state);
+		Ok(())
+	}
+
+	/// Pushes a state's funding allocation into the channel's holdings mapping
+	/// in the canister.
+	fn update_holdings(&mut self, params: &Params, state: &State) {
+		for (i, outcome) in state.allocation.iter().enumerate() {
+			self.holdings.insert(
+				Funding::new(state.channel.clone(), params.participants[i].clone()),
+				outcome.clone(),
+			);
+		}
 	}
 
 	/// Calculates the total funds held in a channel. If the channel is unknown
@@ -142,11 +152,7 @@ impl CanisterState {
 			require!(!old_state.settled(now), AlreadyConcluded);
 		}
 
-		let funds = &self.channel_funds(&state.state.channel, &params);
-
-		self.register_channel(&params, RegisteredState::conclude(state, &params, funds)?);
-
-		Ok(())
+		self.register_channel(&params, RegisteredState::conclude(state, &params)?)
 	}
 
 	pub fn dispute(
@@ -160,14 +166,7 @@ impl CanisterState {
 			require!(old_state.state.version < state.state.version, OutdatedState);
 		}
 
-		let funds = &self.channel_funds(&state.state.channel, &params);
-
-		self.register_channel(
-			&params,
-			RegisteredState::dispute(state, &params, funds, now)?,
-		);
-
-		Ok(())
+		self.register_channel(&params, RegisteredState::dispute(state, &params, now)?)
 	}
 
 	pub fn withdraw(
