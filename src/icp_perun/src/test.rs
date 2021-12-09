@@ -38,7 +38,7 @@ pub fn default_account() -> L1Account {
 }
 
 /// Generates a public key pair from a randomness seed and an index.
-pub fn keys(rand: u8, id: u8) -> (ExpandedSecretKey, L2Account) {
+fn keys(rand: u8, id: u8) -> (ExpandedSecretKey, L2Account) {
 	let hash = Hash::digest(&[rand, id, 1, 2, 3]).0;
 	let sk = SecretKey::from_bytes(&hash.as_slice()[..32]).unwrap();
 	let esk = ExpandedSecretKey::from(&sk);
