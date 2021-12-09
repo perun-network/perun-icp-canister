@@ -94,7 +94,7 @@ pub struct FullySignedState {
 	pub sigs: Vec<L2Signature>,
 }
 
-#[derive(Deserialize, CandidType)]
+#[derive(Clone, Deserialize, CandidType)]
 /// A registered channel's state, as seen by the canister. Represents a channel
 /// after a call to "conclude" or "dispute" on the canister. The timeout, in
 /// combination with the state's "finalized" flag determine whether a channel is
