@@ -50,5 +50,6 @@ service : {
 	"deposit": (Funding, Amount) -> (opt Error);
 	"query_deposit": (Funding) -> (opt Amount) query;
 	"conclude": (Params, FullySignedState) -> (opt Error);
+	"dispute": (Params, FullySignedState) -> (opt Error);
 	"withdraw": (WithdrawalRequest, blob) -> (opt Amount, opt Error);
 }
