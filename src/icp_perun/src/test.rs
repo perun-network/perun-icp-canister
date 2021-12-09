@@ -94,10 +94,19 @@ impl Setup {
 
 	/// Creates a signed withdrawal request of the setup's channel for a given
 	/// participant and receiver.
-	pub fn withdrawal(&self, part: usize, receiver: L1Account) -> (WithdrawalRequest, L2Signature) {
+	pub fn withdrawal_to(
+		&self,
+		part: usize,
+		receiver: L1Account,
+	) -> (WithdrawalRequest, L2Signature) {
 		let funding = self.funding(part);
 		let req = WithdrawalRequest::new(funding, receiver);
 		(req.clone(), self.sign_withdrawal(&req, part))
+	}
+
+	/// Creates a signed withdrawal request with a preset receiver.
+	pub fn withdrawal(&self, part: usize) -> (WithdrawalRequest, L2Signature) {
+		self.withdrawal_to(part, default_account())
 	}
 
 	/// Manually signs a withdrawal request using the requested participant's
