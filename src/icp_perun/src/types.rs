@@ -13,8 +13,8 @@
 //  limitations under the License.
 
 use crate::{
-	ensure,
 	error::{Error, Result as CanisterResult},
+	require,
 };
 use candid::Encode;
 use core::cmp::*;
@@ -136,7 +136,7 @@ impl<'de> Deserialize<'de> for Hash {
 		D: Deserializer<'de>,
 	{
 		let bytes = ByteBuf::deserialize(deserializer)?;
-		ensure!(
+		require!(
 			bytes.len() == <Hasher as digest::Digest>::output_size(),
 			D::Error::invalid_length(bytes.len(), &"hash digest")
 		);
@@ -287,15 +287,15 @@ impl FullySignedState {
 	/// Checks that a channel state is authenticated and matches the supplied
 	/// parameters and its outcome does not exceed the supplied total deposits.
 	pub fn validate(&self, params: &Params, funds: &Amount) -> CanisterResult<()> {
-		ensure!(self.state.channel == params.id(), InvalidInput);
-		ensure!(self.sigs.len() == params.participants.len(), InvalidInput);
-		ensure!(self.sigs.len() == self.state.allocation.len(), InvalidInput);
+		require!(self.state.channel == params.id(), InvalidInput);
+		require!(self.sigs.len() == params.participants.len(), InvalidInput);
+		require!(self.sigs.len() == self.state.allocation.len(), InvalidInput);
 		// A channel state is allowed to be under-funded if it is the initial
 		// state, as funding happens only after the initial state is signed and
 		// we want to allow withdrawals from partially funded channels that get
 		// stuck in the initial state.
 		if !self.state.may_be_underfunded() {
-			ensure!(funds >= &self.state.funds(), InsufficientFunding);
+			require!(funds >= &self.state.funds(), InsufficientFunding);
 		}
 
 		for (i, pk) in params.participants.iter().enumerate() {
@@ -306,7 +306,7 @@ impl FullySignedState {
 	}
 
 	pub fn validate_final(&self, params: &Params, funds: &Amount) -> CanisterResult<()> {
-		ensure!(self.state.finalized, NotFinalized);
+		require!(self.state.finalized, NotFinalized);
 		self.validate(params, funds)
 	}
 }

@@ -132,7 +132,7 @@ impl CanisterState {
 		now: Timestamp,
 	) -> Result<()> {
 		if let Some(old_state) = self.channels.get(&state.state.channel) {
-			ensure!(!old_state.settled(now), AlreadyConcluded);
+			require!(!old_state.settled(now), AlreadyConcluded);
 		}
 
 		let funds = &self.channel_funds(&state.state.channel, &params);
@@ -149,8 +149,8 @@ impl CanisterState {
 		now: Timestamp,
 	) -> Result<()> {
 		if let Some(old_state) = self.channels.get(&state.state.channel) {
-			ensure!(!old_state.settled(now), AlreadyConcluded);
-			ensure!(old_state.state.version < state.state.version, OutdatedState);
+			require!(!old_state.settled(now), AlreadyConcluded);
+			require!(old_state.state.version < state.state.version, OutdatedState);
 		}
 
 		let funds = &self.channel_funds(&state.state.channel, &params);
@@ -173,7 +173,7 @@ impl CanisterState {
 		match self.channels.get(&req.funding.channel) {
 			None => Err(Error::NotFinalized),
 			Some(state) => {
-				ensure!(state.settled(now), NotFinalized);
+				require!(state.settled(now), NotFinalized);
 				Ok(self.holdings.remove(&req.funding).unwrap_or_default())
 			}
 		}
