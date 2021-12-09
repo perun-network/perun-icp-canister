@@ -26,6 +26,7 @@ serde = { version = "1.0.130", features = ["derive"] }
 serde_bytes = "0.11"
 
 [dev-dependencies]
+assert = "0.0.4"
 ic-agent = "0.10.0"
 # Needed for ic_agent identity creation.
 ring = { version = "0.16.11", features = ["std"] }
