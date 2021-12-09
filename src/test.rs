@@ -32,6 +32,7 @@ pub struct Setup {
 	pub canister: CanisterState,
 	pub params: Params,
 	pub state: State,
+	pub prng: Option<Prng>,
 }
 
 /// Returns a default L1 account value.
@@ -78,12 +79,7 @@ impl Setup {
 		ret.parts = vec![key0.1, key1.1];
 		ret.secrets = vec![key0.0, key1.0];
 
-		let mut bytes: [u8; 2] = Default::default();
-		let n = rand.rand_u64();
-		bytes[0] = (n & 255) as u8;
-		bytes[1] = ((n >> 8) & 255) as u8;
-
-		ret.params.nonce = Hash::digest(&bytes);
+		ret.params.nonce = Hash::digest(&rand.rand_u64().to_be_bytes());
 		ret.params.participants = ret.parts.clone();
 		ret.params.challenge_duration = 1;
 
@@ -99,6 +95,8 @@ impl Setup {
 					.unwrap();
 			}
 		}
+
+		ret.prng = Some(rand.clone());
 
 		ret
 	}
