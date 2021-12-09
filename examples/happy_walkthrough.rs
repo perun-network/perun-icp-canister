@@ -64,7 +64,7 @@ async fn walkthrough(cid: Principal, url: String) -> Result<(), Error> {
 	demo.setup.state.allocation.swap(alice, bob);
 	// Conclude the channel.
 	demo.conclude().await?;
-	let state = demo.query_state(&demo.setup.state.channel).await?.unwrap();
+	let state = demo.query_state().await?.unwrap();
 	info!("state is final: {}", state.state.finalized);
 	// Withdraw balances.
 	demo.withdraw(alice).await?;
@@ -128,11 +128,11 @@ impl Demo {
 		Ok(())
 	}
 
-	async fn query_state(&self, id: &ChannelId) -> Result<Option<RegisteredState>, Error> {
+	async fn query_state(&self) -> Result<Option<RegisteredState>, Error> {
 		let response = self
 			.agent
 			.query(&self.canister, "query_state")
-			.with_arg(Encode!(&id).unwrap())
+			.with_arg(Encode!(&self.setup.state.channel).unwrap())
 			.call()
 			.await?;
 		Ok(Decode!(&response, Option<RegisteredState>).unwrap())
