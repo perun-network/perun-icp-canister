@@ -398,10 +398,10 @@ fn test_dispute_underfunded_initial_state() {
 		.settled(time));
 
 	// Withdraw the funding.
-	let (req, sig) = s.withdrawal(0, test::default_account());
+	let (req, sig) = s.withdrawal(0);
 	assert_eq!(s.canister.withdraw(req, sig, time), Ok(amount.clone()));
 
-	let (req, sig) = s.withdrawal(1, test::default_account());
+	let (req, sig) = s.withdrawal(1);
 	assert_eq!(s.canister.withdraw(req, sig, time), Ok(Amount::default()));
 }
 
@@ -428,7 +428,7 @@ fn test_withdraw() {
 	let sstate = s.sign_state();
 	assert_ok!(s.canister.conclude(s.params.clone(), sstate, 0));
 
-	let (req, sig) = s.withdrawal(0, test::default_account());
+	let (req, sig) = s.withdrawal(0);
 
 	let holdings = s.canister.query_holdings(s.funding(0)).unwrap();
 	assert_eq!(
@@ -447,7 +447,7 @@ fn test_withdraw_invalid_sig() {
 	let sstate = s.sign_state();
 	assert_ok!(s.canister.conclude(s.params.clone(), sstate, 0));
 
-	let (req, _) = s.withdrawal(0, test::default_account());
+	let (req, _) = s.withdrawal(0);
 	let sig = s.sign_withdrawal(&req, 1); // sign with wrong user.
 
 	assert_eq!(s.canister.withdraw(req, sig, 0), Err(Error::Authentication));
@@ -462,7 +462,7 @@ fn test_withdraw_unknown_channel() {
 	let sstate = s.sign_state();
 	assert_ok!(s.canister.conclude(s.params.clone(), sstate, 0));
 
-	let (mut req, _) = s.withdrawal(0, test::default_account());
+	let (mut req, _) = s.withdrawal(0);
 	req.funding.channel = unknown_id;
 
 	let sig = s.sign_withdrawal(&req, 0);
@@ -484,7 +484,7 @@ fn test_withdraw_not_finalized() {
 		.unwrap()
 		.settled(now));
 
-	let (req, sig) = s.withdrawal(0, test::default_account());
+	let (req, sig) = s.withdrawal(0);
 
 	assert_eq!(s.canister.withdraw(req, sig, 0), Err(Error::NotFinalized));
 }
