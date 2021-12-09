@@ -255,7 +255,7 @@ impl State {
 	}
 
 	/// Calculates the total funds in a channel's state.
-	pub fn funds(&self) -> Amount {
+	pub fn total(&self) -> Amount {
 		self.allocation
 			.iter()
 			.fold(Amount::default(), |x, y| x + y.clone())

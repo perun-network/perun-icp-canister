@@ -106,7 +106,7 @@ impl CanisterState {
 	/// deposit distribution exactly if fully funded.
 	pub fn register_channel(&mut self, params: &Params, state: RegisteredState) -> Result<()> {
 		let deposits = &self.channel_funds(&state.state.channel, &params);
-		if deposits < &state.state.funds() {
+		if deposits < &state.state.total() {
 			require!(state.state.may_be_underfunded(), InsufficientFunding);
 		} else {
 			self.update_holdings(&params, &state.state);
