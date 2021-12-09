@@ -18,8 +18,6 @@ pub mod error;
 pub mod test;
 pub mod types;
 
-#[cfg(test)]
-use assert::assert_ok;
 use error::*;
 use ic_cdk::api::time as blocktime;
 use types::*;
@@ -196,6 +194,8 @@ impl CanisterState {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	use assert::assert_ok;
 
 	#[test]
 	/// Tests that repeated deposits are added correctly and that only the specified
