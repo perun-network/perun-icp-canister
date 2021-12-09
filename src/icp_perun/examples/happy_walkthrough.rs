@@ -20,7 +20,7 @@ use ic_agent::{
 	identity::BasicIdentity, Agent, Identity,
 };
 use log::{error, info};
-use perun::{test, types::Amount};
+use perun::{test, types::*};
 use ring::{rand::SystemRandom, signature::Ed25519KeyPair};
 use std::{env, error, result::Result, time::Duration};
 
@@ -64,6 +64,8 @@ async fn walkthrough(cid: Principal, url: String) -> Result<(), Error> {
 	demo.setup.state.allocation.swap(alice, bob);
 	// Conclude the channel.
 	demo.conclude().await?;
+	let state = demo.query_state(&demo.setup.state.channel).await?.unwrap();
+	info!("state is final: {}", state.state.finalized);
 	// Withdraw balances.
 	demo.withdraw(alice).await?;
 	demo.withdraw(bob).await?;
@@ -124,6 +126,16 @@ impl Demo {
 			fid.channel, part, res_amount
 		);
 		Ok(())
+	}
+
+	async fn query_state(&self, id: &ChannelId) -> Result<Option<RegisteredState>, Error> {
+		let response = self
+			.agent
+			.query(&self.canister, "query_state")
+			.with_arg(Encode!(&id).unwrap())
+			.call()
+			.await?;
+		Ok(Decode!(&response, Option<RegisteredState>).unwrap())
 	}
 
 	async fn conclude(&self) -> Result<(), Error> {
