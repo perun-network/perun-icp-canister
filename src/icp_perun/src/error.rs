@@ -15,7 +15,7 @@
 use ic_cdk::export::candid::CandidType;
 
 #[macro_export]
-macro_rules! ensure {
+macro_rules! require {
 	($cond:expr, $err:ident) => {
 		if !($cond) {
 			return Err(Error::$err);
