@@ -286,17 +286,10 @@ impl Params {
 impl FullySignedState {
 	/// Checks that a channel state is authenticated and matches the supplied
 	/// parameters and its outcome does not exceed the supplied total deposits.
-	pub fn validate(&self, params: &Params, funds: &Amount) -> CanisterResult<()> {
+	pub fn validate(&self, params: &Params) -> CanisterResult<()> {
 		require!(self.state.channel == params.id(), InvalidInput);
 		require!(self.sigs.len() == params.participants.len(), InvalidInput);
 		require!(self.sigs.len() == self.state.allocation.len(), InvalidInput);
-		// A channel state is allowed to be under-funded if it is the initial
-		// state, as funding happens only after the initial state is signed and
-		// we want to allow withdrawals from partially funded channels that get
-		// stuck in the initial state.
-		if !self.state.may_be_underfunded() {
-			require!(funds >= &self.state.funds(), InsufficientFunding);
-		}
 
 		for (i, pk) in params.participants.iter().enumerate() {
 			self.state.validate_sig(&self.sigs[i], pk)?;
@@ -305,21 +298,17 @@ impl FullySignedState {
 		Ok(())
 	}
 
-	pub fn validate_final(&self, params: &Params, funds: &Amount) -> CanisterResult<()> {
+	pub fn validate_final(&self, params: &Params) -> CanisterResult<()> {
 		require!(self.state.finalized, NotFinalized);
-		self.validate(params, funds)
+		self.validate(params)
 	}
 }
 
 // RegisteredState
 
 impl RegisteredState {
-	pub fn conclude(
-		state: FullySignedState,
-		params: &Params,
-		funds: &Amount,
-	) -> CanisterResult<Self> {
-		state.validate_final(params, funds)?;
+	pub fn conclude(state: FullySignedState, params: &Params) -> CanisterResult<Self> {
+		state.validate_final(params)?;
 		Ok(Self {
 			state: state.state,
 			timeout: Default::default(),
@@ -329,10 +318,9 @@ impl RegisteredState {
 	pub fn dispute(
 		state: FullySignedState,
 		params: &Params,
-		funds: &Amount,
 		now: Timestamp,
 	) -> CanisterResult<Self> {
-		state.validate(params, funds)?;
+		state.validate(params)?;
 		Ok(Self {
 			state: state.state,
 			timeout: now + params.challenge_duration,
