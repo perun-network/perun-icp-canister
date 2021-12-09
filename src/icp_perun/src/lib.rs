@@ -199,7 +199,6 @@ fn test_deposit() {
 	assert_eq!(s.canister.query_deposit(funding2.clone()), None);
 	// Deposit 10.
 	assert_eq!(s.canister.deposit(funding.clone(), 10.into()), Ok(()));
-	assert_eq!(s.canister.query_deposit(funding2.clone()), None);
 	// Now 10.
 	assert_eq!(s.canister.query_deposit(funding.clone()), Some(10.into()));
 	assert_eq!(s.canister.query_deposit(funding2.clone()), None);
@@ -207,8 +206,12 @@ fn test_deposit() {
 	assert_eq!(s.canister.query_deposit(funding2.clone()), None);
 	assert_eq!(s.canister.deposit(funding.clone(), 20.into()), Ok(()));
 	// Now 30.
-	assert_eq!(s.canister.query_deposit(funding), Some(30.into()));
+	assert_eq!(s.canister.query_deposit(funding.clone()), Some(30.into()));
 	assert_eq!(s.canister.query_deposit(funding2.clone()), None);
+	// Deposit 45 to second party.
+	assert_eq!(s.canister.deposit(funding2.clone(), 45.into()), Ok(()));
+	assert_eq!(s.canister.query_deposit(funding), Some(30.into()));
+	assert_eq!(s.canister.query_deposit(funding2), Some(45.into()));
 }
 
 #[test]
