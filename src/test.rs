@@ -40,9 +40,12 @@ pub fn default_account() -> L1Account {
 }
 
 /// Generates a public key pair from a randomness seed and an index.
-fn keys(rand: &mut Prng, id: u8) -> (ExpandedSecretKey, L2Account) {
-	let hash = Hash::digest(&[(rand.rand_u64() & 255) as u8, id, 1, 2, 3]).0;
-	let sk = SecretKey::from_bytes(&hash.as_slice()[..32]).unwrap();
+fn rand_key(rand: &mut Prng) -> (ExpandedSecretKey, L2Account) {
+	let mut bytes: [u8; 32] = Default::default();
+	for i in 0..bytes.len() {
+		bytes[i] = (rand.rand_u64() & 255) as u8;
+	}
+	let sk = SecretKey::from_bytes(&bytes).unwrap();
 	let esk = ExpandedSecretKey::from(&sk);
 	let pk = L2Account((&sk).into());
 	(esk, pk)
@@ -70,8 +73,8 @@ impl Setup {
 	/// generated channel state should be deposited in the canister already.
 	pub fn with_rng(rand: &mut Prng, finalized: bool, funded: bool) -> Self {
 		let mut ret = Self::default();
-		let key0 = keys(rand, 0);
-		let key1 = keys(rand, 1);
+		let key0 = rand_key(rand);
+		let key1 = rand_key(rand);
 		ret.parts = vec![key0.1, key1.1];
 		ret.secrets = vec![key0.0, key1.0];
 
