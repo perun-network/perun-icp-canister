@@ -14,10 +14,10 @@
 
 use crate::types::*;
 use crate::CanisterState;
-use std::cell::RefCell;
 use candid::Encode;
 use ed25519_dalek::{ExpandedSecretKey, SecretKey};
 use oorandom::Rand64 as Prng;
+use std::cell::RefCell;
 
 #[derive(Default)]
 /// Contains a canister test environment with helper functions for easier
