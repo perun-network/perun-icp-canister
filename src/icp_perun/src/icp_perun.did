@@ -53,7 +53,7 @@ type RegisteredState = record {
 
 service : {
 	"deposit": (Funding, Amount) -> (opt Error);
-	"query_deposit": (Funding) -> (opt Amount) query;
+	"query_holdings": (Funding) -> (opt Amount) query;
 	"conclude": (Params, FullySignedState) -> (opt Error);
 	"dispute": (Params, FullySignedState) -> (opt Error);
 	"query_state": (ChannelId) -> (opt RegisteredState);
