@@ -396,6 +396,9 @@ fn test_dispute_underfunded_initial_state() {
 	// Withdraw the funding.
 	let (req, sig) = s.withdrawal(0, test::default_account());
 	assert_eq!(s.canister.withdraw(req, sig, time), Ok(amount.clone()));
+
+	let (req, sig) = s.withdrawal(1, test::default_account());
+	assert_eq!(s.canister.withdraw(req, sig, time), Ok(Amount::default()));
 }
 
 #[test]
