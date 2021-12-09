@@ -89,7 +89,7 @@ impl Setup {
 
 		ret.state.channel = ret.params.id();
 		ret.state.version = rand.rand_u64();
-		ret.state.allocation = vec![ret.params.nonce.0[0].into(), ret.params.nonce.0[1].into()];
+		ret.state.allocation = vec![rand.rand_u64().into(), rand.rand_u64().into()];
 		ret.state.finalized = finalized;
 
 		if funded {
