@@ -280,7 +280,7 @@ fn test_withdraw_invalid_sig() {
 /// Tests that the channel to be withdrawn from must be known.
 fn test_withdraw_unknown_channel() {
 	let mut s = test::Setup::new(true, true);
-	let unknown_id = test::Setup::new(false, false).params.id();
+	let unknown_id = test::rand_hash(&mut s.prng);
 	let sstate = s.sign_state();
 	assert_ok!(s.canister.conclude(s.params.clone(), sstate, 0));
 
