@@ -12,12 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use crate::types::*;
-use crate::CanisterState;
 use candid::Encode;
 use ed25519_dalek::{ExpandedSecretKey, SecretKey};
 use oorandom::Rand64 as Prng;
-use std::cell::RefCell;
+use std::time::SystemTime;
+
+use crate::{types::*, CanisterState};
 
 #[derive(Default)]
 /// Contains a canister test environment with helper functions for easier
@@ -52,15 +52,18 @@ fn rand_key(rand: &mut Prng) -> (ExpandedSecretKey, L2Account) {
 	(esk, pk)
 }
 
-thread_local! {
-	static SEED: RefCell<u128> = Default::default();
-}
+static SEED_ENV_VAR: &str = "PERUN_TEST_SEED";
 
 fn seed() -> u128 {
-	SEED.with(|s| {
-		*s.borrow_mut() += 1;
-		*s.borrow()
-	})
+	let s = match std::env::var(SEED_ENV_VAR) {
+		Ok(seed) => seed.parse().unwrap(),
+		Err(_) => SystemTime::now()
+			.duration_since(SystemTime::UNIX_EPOCH)
+			.unwrap()
+			.as_nanos(),
+	};
+	println!("Using PRNG seed {}={}", SEED_ENV_VAR, s);
+	s
 }
 
 impl Setup {
