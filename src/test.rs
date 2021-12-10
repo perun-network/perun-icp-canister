@@ -42,11 +42,14 @@ pub fn default_account() -> L1Account {
 
 /// Generates a public key pair from a randomness seed and an index.
 fn rand_key(rand: &mut Prng) -> (ExpandedSecretKey, L2Account) {
-	let mut bytes: [u8; 32] = Default::default();
-	for i in 0..bytes.len() {
-		bytes[i] = (rand.rand_u64() & 255) as u8;
-	}
-	let sk = SecretKey::from_bytes(&bytes).unwrap();
+	let bytes64: [u64; 4] = [
+		rand.rand_u64(),
+		rand.rand_u64(),
+		rand.rand_u64(),
+		rand.rand_u64(),
+	];
+	let bytes8: [u8; 32] = unsafe { std::mem::transmute(bytes64) };
+	let sk = SecretKey::from_bytes(&bytes8).unwrap();
 	let esk = ExpandedSecretKey::from(&sk);
 	let pk = L2Account((&sk).into());
 	(esk, pk)
