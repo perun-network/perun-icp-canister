@@ -233,14 +233,14 @@ fn test_dispute_underfunded_initial_state() {
 fn test_holding_tracking_deposit() {
 	let s = test::Setup::new(true, true);
 	let sum = s.state.allocation[0].clone() + s.state.allocation[1].clone();
-	assert_eq!(s.canister.channel_funds(&s.state.channel, &s.params), sum);
+	assert_eq!(s.canister.holdings_total(&s.params), sum);
 }
 
 #[test]
 /// Tests that unregistered channels are counted as unfunded.
 fn test_holding_tracking_none() {
 	let s = test::Setup::new(true, false);
-	assert_eq!(s.canister.channel_funds(&s.state.channel, &s.params), 0);
+	assert_eq!(s.canister.holdings_total(&s.params), 0);
 }
 
 #[test]
