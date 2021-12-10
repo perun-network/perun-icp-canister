@@ -19,7 +19,6 @@ use std::time::SystemTime;
 
 use crate::{types::*, CanisterState};
 
-#[derive(Default)]
 /// Contains a canister test environment with helper functions for easier
 /// testing. Contains a canister, a set of channel participants, and a channel
 /// state (along with matching channel parameters).
@@ -32,12 +31,16 @@ pub struct Setup {
 	pub canister: CanisterState,
 	pub params: Params,
 	pub state: State,
-	pub prng: Option<Prng>,
+	pub prng: Prng,
 }
 
 /// Returns a default L1 account value.
 pub fn default_account() -> L1Account {
 	L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap()
+}
+
+pub fn rand_hash(rng: &mut Prng) -> Hash {
+	Hash::digest(&rng.rand_u64().to_ne_bytes())
 }
 
 /// Generates a public key pair from a randomness seed and an index.
@@ -71,40 +74,51 @@ fn seed() -> u128 {
 
 impl Setup {
 	pub fn new(finalized: bool, funded: bool) -> Self {
-		Self::with_rng(&mut Prng::new(seed()), finalized, funded)
+		Self::with_rng(Prng::new(seed()), finalized, funded)
 	}
 
 	/// Creates a randomised test setup depending on the provided randomness
 	/// seed. The `finalized` flag controls whether the generated channel state
 	/// is final. The `funded` flag controls whether the outcome of the
 	/// generated channel state should be deposited in the canister already.
-	pub fn with_rng(rand: &mut Prng, finalized: bool, funded: bool) -> Self {
-		let mut ret = Self::default();
-		let key0 = rand_key(rand);
-		let key1 = rand_key(rand);
-		ret.parts = vec![key0.1, key1.1];
-		ret.secrets = vec![key0.0, key1.0];
+	pub fn with_rng(mut rand: Prng, finalized: bool, funded: bool) -> Self {
+		let key0 = rand_key(&mut rand);
+		let key1 = rand_key(&mut rand);
+		let parts = vec![key0.1, key1.1];
+		let secrets = vec![key0.0, key1.0];
 
-		ret.params.nonce = Hash::digest(&rand.rand_u64().to_be_bytes());
-		ret.params.participants = ret.parts.clone();
-		ret.params.challenge_duration = 1;
+		let params = Params {
+			nonce: rand_hash(&mut rand),
+			participants: parts.clone(),
+			challenge_duration: 1,
+		};
 
-		ret.state.channel = ret.params.id();
-		ret.state.version = rand.rand_u64();
-		ret.state.allocation = vec![rand.rand_u64().into(), rand.rand_u64().into()];
-		ret.state.finalized = finalized;
+		let state = State {
+			channel: params.id(),
+			version: rand.rand_u64(),
+			allocation: vec![rand.rand_u64().into(), rand.rand_u64().into()],
+			finalized,
+		};
 
-		if funded {
-			for (i, _) in ret.parts.iter().enumerate() {
-				ret.canister
-					.deposit(ret.funding(i), ret.state.allocation[i].clone())
-					.unwrap();
-			}
+		let mut s = Setup {
+			parts,
+			secrets,
+			canister: Default::default(),
+			params,
+			state,
+			prng: rand,
+		};
+
+		if !funded {
+			return s;
 		}
 
-		ret.prng = Some(rand.clone());
-
-		ret
+		for (i, _) in s.parts.iter().enumerate() {
+			s.canister
+				.deposit(s.funding(i), s.state.allocation[i].clone())
+				.unwrap();
+		}
+		s
 	}
 
 	/// Signs the setup's channel state for all channel participants.
