@@ -24,6 +24,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v1
         name: Setup Cache
+        with:
+          cache-on-failure: true
 
       - uses: actions-rs/cargo@v1
         name: Format
@@ -36,7 +38,7 @@ jobs:
         with:
           command: check
           args: -q --target wasm32-unknown-unknown --all-features
-      
+
       - uses: actions-rs/cargo@v1
         name: Documentation
         with:
@@ -64,6 +66,6 @@ jobs:
       - name: Compile Examples
         run: |
           # Change the crate type from "cdylib" to "lib".
-          sed -i 's/"cdylib"/"lib"/g' src/icp_perun/Cargo.toml
+          sed -i 's/"cdylib"/"lib"/g' Cargo.toml
           cargo build -q --examples
-          git restore src/icp_perun/Cargo.toml
+          git restore Cargo.toml
