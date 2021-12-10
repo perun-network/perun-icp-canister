@@ -12,14 +12,17 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+pub mod error;
+pub mod types;
+// We don't need testing code in wasm output, only for tests and examples
+#[cfg(not(target_family = "wasm"))]
+pub mod test;
+
+use ic_cdk::api::time as blocktime;
 use std::cell::RefCell;
 use std::collections::HashMap;
-pub mod error;
-pub mod test;
-pub mod types;
 
 use error::*;
-use ic_cdk::api::time as blocktime;
 use types::*;
 
 thread_local! {
