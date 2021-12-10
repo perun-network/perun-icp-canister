@@ -56,7 +56,7 @@ pub type Nonce = Hash;
 /// Channel state version identifier.
 pub type Version = u64;
 
-#[derive(Deserialize, CandidType, Default, Clone)]
+#[derive(Deserialize, CandidType, Clone)]
 /// The immutable parameters and state of a Perun channel.
 pub struct Params {
 	/// The channel's unique nonce, to protect against replay attacks.
@@ -332,10 +332,7 @@ impl RegisteredState {
 
 impl WithdrawalRequest {
 	pub fn new(funding: Funding, receiver: L1Account) -> Self {
-		Self {
-			funding: funding,
-			receiver: receiver,
-		}
+		Self { funding, receiver }
 	}
 
 	pub fn validate_sig(&self, sig: &L2Signature) -> CanisterResult<()> {
