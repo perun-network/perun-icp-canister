@@ -116,8 +116,8 @@ impl CanisterState {
 	/// allowed to be under-funded and are otherwise expected to match the
 	/// deposit distribution exactly if fully funded.
 	fn register_channel(&mut self, params: &Params, state: RegisteredState) -> Result<()> {
-		let deposits = &self.channel_funds(&state.state.channel, &params);
-		if deposits < &state.state.total() {
+		let total = &self.holdings_total(&params);
+		if total < &state.state.total() {
 			require!(state.state.may_be_underfunded(), InsufficientFunding);
 		} else {
 			self.update_holdings(&params, &state.state);
@@ -140,10 +140,10 @@ impl CanisterState {
 
 	/// Calculates the total funds held in a channel. If the channel is unknown
 	/// and there are no deposited funds for the channel, returns 0.
-	pub fn channel_funds(&self, channel: &ChannelId, params: &Params) -> Amount {
+	pub fn holdings_total(&self, params: &Params) -> Amount {
 		let mut acc = Amount::default();
 		for pk in params.participants.iter() {
-			let funding = Funding::new(channel.clone(), pk.clone());
+			let funding = Funding::new(params.id(), pk.clone());
 			acc += self
 				.holdings
 				.get(&funding)
