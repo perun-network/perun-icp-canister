@@ -12,15 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-extern crate icp_perun as perun;
 use candid::{encode_args, Decode, Encode, Nat};
 use garcon::Delay;
 use ic_agent::{
 	agent::http_transport::ReqwestHttpReplicaV2Transport, ic_types::Principal,
 	identity::BasicIdentity, Agent, Identity,
 };
+use icp_perun::{test, types::*};
 use log::{error, info};
-use perun::{test, types::*};
 use ring::{rand::SystemRandom, signature::Ed25519KeyPair};
 use std::{env, error, result::Result, time::Duration};
 
