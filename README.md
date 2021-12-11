@@ -2,6 +2,9 @@
     <a href="https://perun.network/"><img src=".asset/go_perun.png" alt="Perun" width="30%"></a>
 </h1>
 
+[![CI Status](https://github.com/perun-network/perun-icp-canister/actions/workflows/rust.yml/badge.svg)](https://github.com/perun-network/perun-icp-canister/actions/workflows/rust.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202-blue)](https://www.apache.org/licenses/LICENSE-2.0.txt)
+
 # Perun ICP Canister
 
 This repository contains the Internet Computer canister for the [Perun state channel framework](https://perun.network) developed by [PolyCrypt](https://polycry.pt).
