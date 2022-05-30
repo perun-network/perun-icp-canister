@@ -1,6 +1,6 @@
 [package]
 name = "icp-perun"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["PolyCrypt GmbH <info@polycry.pt>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -16,14 +16,17 @@ crate-type = ["cdylib"]
 name = "icp_perun"
 
 [dependencies]
-ic-cdk = "0.3"
-ic-cdk-macros = "0.3"
+ic-cdk = "0.5"
+ic-cdk-macros = "^0.5.1"
+ic-ledger-types = { git = "https://github.com/dfinity/cdk-rs", branch = "roman-query-blocks" }
 candid = "0.7.8"
 ed25519-dalek = "1.0.1"
 digest = "0.9.0"
 hex = "0.4.3"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_bytes = "0.11"
+async-trait = "0"
+lazy_static = "1"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 # PRNG in tests and examples

@@ -52,10 +52,12 @@ type RegisteredState = record {
 };
 
 service : {
-	"deposit": (Funding, Amount) -> (opt Error);
+	"deposit": (Funding) -> (opt Error);
 	"query_holdings": (Funding) -> (opt Amount) query;
 	"conclude": (Params, FullySignedState) -> (opt Error);
 	"dispute": (Params, FullySignedState) -> (opt Error);
 	"query_state": (ChannelId) -> (opt RegisteredState);
 	"withdraw": (WithdrawalRequest, blob) -> (opt Amount, opt Error);
+
+	"transaction_notification": (nat64) -> ();
 }
