@@ -46,6 +46,8 @@ pub enum Error {
 	/// When a state that is registered for dispute is older than the previously
 	/// registered state.
 	OutdatedState,
+	/// Error while interaction with the ledger.
+	LedgerError,
 }
 
 /// Canister operation result type.

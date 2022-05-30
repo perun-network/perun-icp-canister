@@ -18,6 +18,7 @@ use crate::{
 };
 use candid::Encode;
 use core::cmp::*;
+use core::convert::*;
 use digest::{FixedOutputDirty, Update};
 use ed25519_dalek::{PublicKey, Sha512 as Hasher, Signature};
 pub use ic_cdk::export::candid::{
@@ -354,5 +355,11 @@ impl Funding {
 			channel,
 			participant,
 		}
+	}
+
+	pub fn memo(&self) -> u64 {
+		let h = Hash::digest(&Encode!(self).unwrap());
+		let arr: [u8;8] = [h.0[0], h.0[1], h.0[2], h.0[3], h.0[4], h.0[5], h.0[6], h.0[7]];
+		u64::from_le_bytes(arr)
 	}
 }

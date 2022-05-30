@@ -102,7 +102,7 @@ impl Demo {
 			fid.channel, part, amount
 		);
 		self.agent
-			.update(&self.canister, "deposit")
+			.update(&self.canister, "deposit_mocked")
 			.with_arg(encode_args((&fid, &amount)).unwrap())
 			.call_and_wait(self.delay.clone())
 			.await?;
@@ -157,7 +157,7 @@ impl Demo {
 		// Use the Canister ID here as receiver since the funds are currently mocked.
 		let (req, auth) = self.setup.withdrawal_to(part, self.canister);
 		self.agent
-			.update(&self.canister, "withdraw")
+			.update(&self.canister, "withdraw_mocked")
 			.with_arg(encode_args((&req, &auth)).unwrap())
 			.call_and_wait(self.delay.clone())
 			.await?;

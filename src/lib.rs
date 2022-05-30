@@ -14,6 +14,8 @@
 
 pub mod error;
 pub mod types;
+pub mod icp;
+
 // We don't need testing code in wasm output, only for tests and examples
 #[cfg(not(target_family = "wasm"))]
 pub mod test;
@@ -22,20 +24,30 @@ pub mod test;
 mod tests;
 
 use ic_cdk::api::time as blocktime;
-use std::cell::RefCell;
+use ic_cdk::export::Principal;
+use ic_ledger_types::{Memo, TransferArgs, Tokens, DEFAULT_FEE, AccountIdentifier, DEFAULT_SUBACCOUNT};
+use lazy_static::lazy_static;
+use std::sync::RwLock;
 use std::collections::HashMap;
 
 use error::*;
 use types::*;
 
-thread_local! {
-	static STATE: RefCell<CanisterState> = Default::default();
+lazy_static! {
+	static ref STATE: RwLock<CanisterState<icp::CanisterTXQuerier>> =
+		RwLock::new(
+			CanisterState::new(
+				icp::CanisterTXQuerier::new(
+					Principal::from_text(icp::MAINNET_ICP_LEDGER)
+						.expect("parsing mainnet principal")),
+				ic_cdk::id(),
+		));
 }
 
-#[derive(Default)]
 /// The canister's state. Contains all currently registered channels, as well as
 /// all deposits and withdrawable balances.
-pub struct CanisterState {
+pub struct CanisterState<Q: icp::TXQuerier> {
+	icp_receiver: icp::Receiver<Q>,
 	/// Tracks all deposits for unregistered channels. For registered channels,
 	/// tracks withdrawable balances instead.
 	holdings: HashMap<Funding, Amount>,
@@ -44,13 +56,21 @@ pub struct CanisterState {
 }
 
 #[ic_cdk_macros::update]
-/// Deposits funds for the specified participant into the specified channel.
-/// Please do NOT over-fund or fund channels that are already fully funded, as
-/// this can lead to a permanent LOSS OF FUNDS.
-fn deposit(funding: Funding, amount: Amount) -> Option<Error> {
-	STATE
-		.with(|s| s.borrow_mut().deposit(funding, amount))
-		.err()
+/// The user needs to call this with his transaction.
+async fn transaction_notification(block_height: u64) {
+	STATE.write().unwrap().process_icp_tx(block_height).await;
+}
+
+#[ic_cdk_macros::update]
+fn deposit(funding: Funding) -> Option<Error> {
+	STATE.write().unwrap().deposit_icp(funding).err()
+}
+
+
+#[ic_cdk_macros::update]
+/// Only used for tests.
+fn deposit_mocked(funding: Funding, amount: Amount) -> Option<Error> {
+	STATE.write().unwrap().deposit(funding, amount).err()
 }
 
 #[ic_cdk_macros::update]
@@ -59,25 +79,64 @@ fn deposit(funding: Funding, amount: Amount) -> Option<Error> {
 /// duration to register a more recent channel state if exists. After the
 /// challenge duration elapsed, the channel will be marked as settled.
 fn dispute(params: Params, state: FullySignedState) -> Option<Error> {
-	STATE
-		.with(|s| s.borrow_mut().dispute(params, state, blocktime()))
-		.err()
+	STATE.write().unwrap().dispute(params, state, blocktime()).err()
 }
 
 #[ic_cdk_macros::update]
 /// Settles a finalized channel and makes its final funds distribution
 /// withdrawable.
 fn conclude(params: Params, state: FullySignedState) -> Option<Error> {
-	STATE
-		.with(|s| s.borrow_mut().conclude(params, state, blocktime()))
-		.err()
+	STATE.write().unwrap().conclude(params, state, blocktime()).err()
 }
 
 #[ic_cdk_macros::update]
 /// Withdraws the specified participant's funds from a settled channel.
-fn withdraw(request: WithdrawalRequest, auth: L2Signature) -> (Option<Amount>, Option<Error>) {
-	let result = STATE.with(|s| s.borrow_mut().withdraw(request, auth, blocktime()));
+async fn withdraw(request: WithdrawalRequest, auth: L2Signature) -> (Option<icp::BlockHeight>, Option<Error>) {
+	let result = withdraw_impl(request, auth).await;
 	(result.as_ref().ok().cloned(), result.err())
+}
+
+#[ic_cdk_macros::update]
+/// Withdraws the specified participant's funds from a settled channel.
+async fn withdraw_mocked(request: WithdrawalRequest, auth: L2Signature) -> (Option<Amount>, Option<Error>) {
+	let result = STATE.write().unwrap().withdraw(request, auth, blocktime());
+	(result.as_ref().ok().cloned(), result.err())
+}
+
+
+async fn withdraw_impl(request: WithdrawalRequest, auth: L2Signature) -> Result<icp::BlockHeight> {
+	let receiver = request.receiver.clone();
+	let funding = request.funding.clone();
+	let amount = STATE.write().unwrap().withdraw(request, auth, blocktime())?;
+	let mut amount_str = amount.to_string();
+	amount_str.retain(|c| c != '_');
+	let amount_u64 = amount_str.parse::<u64>().unwrap();
+
+	match ic_ledger_types::transfer(
+		Principal::from_text(icp::MAINNET_ICP_LEDGER).unwrap(),
+		TransferArgs {
+			memo: Memo(0),
+			amount: Tokens::from_e8s(amount_u64),
+			fee: DEFAULT_FEE,
+			from_subaccount: None,
+			to: AccountIdentifier::new(&receiver, &DEFAULT_SUBACCOUNT),
+			created_at_time: None,
+		}
+	).await {
+		Ok(transfer_result) => {
+			match transfer_result {
+				Ok(block) => Ok(block.into()),
+				Err(_) => {
+					STATE.write().unwrap().deposit(funding, amount)?;
+					Err(Error::LedgerError)
+				},
+			}
+		},
+		_ => {
+			STATE.write().unwrap().deposit(funding, amount)?;
+			Err(Error::LedgerError)
+		},
+	}
 }
 
 #[ic_cdk_macros::query]
@@ -85,20 +144,43 @@ fn withdraw(request: WithdrawalRequest, auth: L2Signature) -> (Option<Amount>, O
 /// this function should be used to check whether all participants have
 /// deposited their owed funds into a channel to ensure it is fully funded.
 fn query_holdings(funding: Funding) -> Option<Amount> {
-	STATE.with(|s| s.borrow().query_holdings(funding))
+	STATE.read().unwrap().query_holdings(funding)
 }
 
 #[ic_cdk_macros::query]
 /// Returns the latest registered state for a given channel and its dispute
 /// timeout. This function should be used to check for registered disputes.
 fn query_state(id: ChannelId) -> Option<RegisteredState> {
-	STATE.with(|s| s.borrow().state(&id))
+	STATE.read().unwrap().state(&id)
 }
 
-impl CanisterState {
+impl<Q> CanisterState<Q> where Q: icp::TXQuerier {
+	pub fn new(q: Q, my_principal: Principal) -> Self {
+		Self {
+			icp_receiver: icp::Receiver::new(q, my_principal),
+			holdings: Default::default(),
+			channels: Default::default(),
+		}
+	}
 	pub fn deposit(&mut self, funding: Funding, amount: Amount) -> Result<()> {
 		*self.holdings.entry(funding).or_insert(Default::default()) += amount;
 		Ok(())
+	}
+
+	/// Call this to access funds deposited and previously registered.
+	pub fn deposit_icp(&mut self, funding: Funding) -> Result<()> {
+		let memo = funding.memo();
+		let amount = self.icp_receiver.drain(memo);
+		self.deposit(funding, amount)
+	}
+
+	/// Call this to process an ICP transaction and register the funds for
+	/// further use.
+	pub async fn process_icp_tx(
+		&mut self,
+		tx: icp::BlockHeight,
+	) -> bool {
+		self.icp_receiver.verify(tx).await
 	}
 
 	pub fn query_holdings(&self, funding: Funding) -> Option<Amount> {
