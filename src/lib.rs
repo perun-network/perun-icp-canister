@@ -13,8 +13,8 @@
 //  limitations under the License.
 
 pub mod error;
-pub mod types;
 pub mod icp;
+pub mod types;
 
 // We don't need testing code in wasm output, only for tests and examples
 #[cfg(not(target_family = "wasm"))]
@@ -25,22 +25,23 @@ mod tests;
 
 use ic_cdk::api::time as blocktime;
 use ic_cdk::export::Principal;
-use ic_ledger_types::{Memo, TransferArgs, Tokens, DEFAULT_FEE, AccountIdentifier, DEFAULT_SUBACCOUNT};
+use ic_ledger_types::{
+	AccountIdentifier, Memo, Tokens, TransferArgs, DEFAULT_FEE, DEFAULT_SUBACCOUNT,
+};
 use lazy_static::lazy_static;
-use std::sync::RwLock;
 use std::collections::HashMap;
+use std::sync::RwLock;
 
 use error::*;
 use types::*;
 
 lazy_static! {
 	static ref STATE: RwLock<CanisterState<icp::CanisterTXQuerier>> =
-		RwLock::new(
-			CanisterState::new(
-				icp::CanisterTXQuerier::new(
-					Principal::from_text(icp::MAINNET_ICP_LEDGER)
-						.expect("parsing mainnet principal")),
-				ic_cdk::id(),
+		RwLock::new(CanisterState::new(
+			icp::CanisterTXQuerier::new(
+				Principal::from_text(icp::MAINNET_ICP_LEDGER).expect("parsing mainnet principal")
+			),
+			ic_cdk::id(),
 		));
 }
 
@@ -66,7 +67,6 @@ fn deposit(funding: Funding) -> Option<Error> {
 	STATE.write().unwrap().deposit_icp(funding).err()
 }
 
-
 #[ic_cdk_macros::update]
 /// Only used for tests.
 fn deposit_mocked(funding: Funding, amount: Amount) -> Option<Error> {
@@ -79,35 +79,51 @@ fn deposit_mocked(funding: Funding, amount: Amount) -> Option<Error> {
 /// duration to register a more recent channel state if exists. After the
 /// challenge duration elapsed, the channel will be marked as settled.
 fn dispute(params: Params, state: FullySignedState) -> Option<Error> {
-	STATE.write().unwrap().dispute(params, state, blocktime()).err()
+	STATE
+		.write()
+		.unwrap()
+		.dispute(params, state, blocktime())
+		.err()
 }
 
 #[ic_cdk_macros::update]
 /// Settles a finalized channel and makes its final funds distribution
 /// withdrawable.
 fn conclude(params: Params, state: FullySignedState) -> Option<Error> {
-	STATE.write().unwrap().conclude(params, state, blocktime()).err()
+	STATE
+		.write()
+		.unwrap()
+		.conclude(params, state, blocktime())
+		.err()
 }
 
 #[ic_cdk_macros::update]
 /// Withdraws the specified participant's funds from a settled channel.
-async fn withdraw(request: WithdrawalRequest, auth: L2Signature) -> (Option<icp::BlockHeight>, Option<Error>) {
+async fn withdraw(
+	request: WithdrawalRequest,
+	auth: L2Signature,
+) -> (Option<icp::BlockHeight>, Option<Error>) {
 	let result = withdraw_impl(request, auth).await;
 	(result.as_ref().ok().cloned(), result.err())
 }
 
 #[ic_cdk_macros::update]
 /// Withdraws the specified participant's funds from a settled channel.
-async fn withdraw_mocked(request: WithdrawalRequest, auth: L2Signature) -> (Option<Amount>, Option<Error>) {
+async fn withdraw_mocked(
+	request: WithdrawalRequest,
+	auth: L2Signature,
+) -> (Option<Amount>, Option<Error>) {
 	let result = STATE.write().unwrap().withdraw(request, auth, blocktime());
 	(result.as_ref().ok().cloned(), result.err())
 }
 
-
 async fn withdraw_impl(request: WithdrawalRequest, auth: L2Signature) -> Result<icp::BlockHeight> {
 	let receiver = request.receiver.clone();
 	let funding = request.funding.clone();
-	let amount = STATE.write().unwrap().withdraw(request, auth, blocktime())?;
+	let amount = STATE
+		.write()
+		.unwrap()
+		.withdraw(request, auth, blocktime())?;
 	let mut amount_str = amount.to_string();
 	amount_str.retain(|c| c != '_');
 	let amount_u64 = amount_str.parse::<u64>().unwrap();
@@ -121,21 +137,21 @@ async fn withdraw_impl(request: WithdrawalRequest, auth: L2Signature) -> Result<
 			from_subaccount: None,
 			to: AccountIdentifier::new(&receiver, &DEFAULT_SUBACCOUNT),
 			created_at_time: None,
-		}
-	).await {
-		Ok(transfer_result) => {
-			match transfer_result {
-				Ok(block) => Ok(block.into()),
-				Err(_) => {
-					STATE.write().unwrap().deposit(funding, amount)?;
-					Err(Error::LedgerError)
-				},
+		},
+	)
+	.await
+	{
+		Ok(transfer_result) => match transfer_result {
+			Ok(block) => Ok(block.into()),
+			Err(_) => {
+				STATE.write().unwrap().deposit(funding, amount)?;
+				Err(Error::LedgerError)
 			}
 		},
 		_ => {
 			STATE.write().unwrap().deposit(funding, amount)?;
 			Err(Error::LedgerError)
-		},
+		}
 	}
 }
 
@@ -154,7 +170,10 @@ fn query_state(id: ChannelId) -> Option<RegisteredState> {
 	STATE.read().unwrap().state(&id)
 }
 
-impl<Q> CanisterState<Q> where Q: icp::TXQuerier {
+impl<Q> CanisterState<Q>
+where
+	Q: icp::TXQuerier,
+{
 	pub fn new(q: Q, my_principal: Principal) -> Self {
 		Self {
 			icp_receiver: icp::Receiver::new(q, my_principal),
@@ -176,10 +195,7 @@ impl<Q> CanisterState<Q> where Q: icp::TXQuerier {
 
 	/// Call this to process an ICP transaction and register the funds for
 	/// further use.
-	pub async fn process_icp_tx(
-		&mut self,
-		tx: icp::BlockHeight,
-	) -> bool {
+	pub async fn process_icp_tx(&mut self, tx: icp::BlockHeight) -> bool {
 		self.icp_receiver.verify(tx).await
 	}
 

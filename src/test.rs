@@ -14,9 +14,9 @@
 
 use candid::Encode;
 use ed25519_dalek::{ExpandedSecretKey, SecretKey};
+use ic_cdk::export::Principal;
 use oorandom::Rand64 as Prng;
 use std::time::SystemTime;
-use ic_cdk::export::Principal;
 
 use crate::{types::*, CanisterState};
 
