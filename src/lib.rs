@@ -1,4 +1,4 @@
-//  Copyright 2021 PolyCrypt GmbH
+//  Copyright 2021, 2022 PolyCrypt GmbH
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 pub mod error;
+pub mod events;
 pub mod icp;
 pub mod types;
 
@@ -33,13 +34,14 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 
 use error::*;
+use events::*;
 use types::*;
 
 lazy_static! {
 	static ref STATE: RwLock<CanisterState<icp::CanisterTXQuerier>> =
 		RwLock::new(CanisterState::new(
 			icp::CanisterTXQuerier::new(
-				Principal::from_text(icp::MAINNET_ICP_LEDGER).expect("parsing mainnet principal")
+				Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parsing principal")
 			),
 			ic_cdk::id(),
 		));
@@ -58,13 +60,18 @@ pub struct CanisterState<Q: icp::TXQuerier> {
 
 #[ic_cdk_macros::update]
 /// The user needs to call this with his transaction.
-async fn transaction_notification(block_height: u64) {
-	STATE.write().unwrap().process_icp_tx(block_height).await;
+async fn transaction_notification(block_height: u64) -> Result<Amount> {
+	STATE.write().unwrap().process_icp_tx(block_height).await
 }
 
 #[ic_cdk_macros::update]
-fn deposit(funding: Funding) -> Option<Error> {
-	STATE.write().unwrap().deposit_icp(funding).err()
+async fn deposit(funding: Funding) -> Option<Error> {
+	STATE
+		.write()
+		.unwrap()
+		.deposit_icp(blocktime(), funding)
+		.await
+		.err()
 }
 
 #[ic_cdk_macros::update]
@@ -187,16 +194,35 @@ where
 	}
 
 	/// Call this to access funds deposited and previously registered.
-	pub fn deposit_icp(&mut self, funding: Funding) -> Result<()> {
+	pub async fn deposit_icp(&mut self, time: Timestamp, funding: Funding) -> Result<()> {
 		let memo = funding.memo();
 		let amount = self.icp_receiver.drain(memo);
-		self.deposit(funding, amount)
+		self.deposit(funding.clone(), amount)?;
+		events::STATE
+			.write()
+			.unwrap()
+			.register_event(
+				time,
+				funding.channel.clone(),
+				Event::Funded {
+					who: funding.participant.clone(),
+					total: self.holdings.get(&funding).cloned().unwrap(),
+				},
+			)
+			.await;
+		Ok(())
 	}
 
 	/// Call this to process an ICP transaction and register the funds for
 	/// further use.
-	pub async fn process_icp_tx(&mut self, tx: icp::BlockHeight) -> bool {
-		self.icp_receiver.verify(tx).await
+	pub async fn process_icp_tx(
+		&mut self,
+		tx: icp::BlockHeight,
+	) -> Result<Amount> {
+		match self.icp_receiver.verify(tx).await {
+			Ok(v) => Ok(v),
+			Err(e) => Err(Error::ReceiverError(e)),
+		}
 	}
 
 	pub fn query_holdings(&self, funding: Funding) -> Option<Amount> {

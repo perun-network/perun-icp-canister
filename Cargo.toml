@@ -18,7 +18,7 @@ name = "icp_perun"
 [dependencies]
 ic-cdk = "0.5"
 ic-cdk-macros = "^0.5.1"
-ic-ledger-types = { git = "https://github.com/dfinity/cdk-rs", branch = "roman-query-blocks" }
+ic-ledger-types = { git = "https://github.com/dfinity/cdk-rs", branch = "main" }
 candid = "0.7.8"
 ed25519-dalek = "1.0.1"
 digest = "0.9.0"

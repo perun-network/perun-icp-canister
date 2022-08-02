@@ -1,0 +1,27 @@
+{
+  "canisters": {
+    "icp_perun": {
+      "build": "./build.sh",
+      "candid": "icp_perun.did",
+      "wasm": "target/wasm32-unknown-unknown/release/icp_perun.wasm",
+      "type": "custom"
+    },
+    "ledger": {
+      "wasm": "ledger.wasm",
+      "candid": "ledger.private.did",
+      "type": "custom"
+    }
+  },
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:8000",
+      "type": "ephemeral"
+    }
+  },
+  "defaults": {
+    "replica": {
+      "subnet_type": "system"
+    }
+  },
+  "version": 1
+}

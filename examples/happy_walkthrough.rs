@@ -1,4 +1,4 @@
-//  Copyright 2021 PolyCrypt GmbH
+//  Copyright 2021, 2022 PolyCrypt GmbH
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -18,9 +18,11 @@ use ic_agent::{
 	agent::http_transport::ReqwestHttpReplicaV2Transport, ic_types::Principal,
 	identity::BasicIdentity, Agent, Identity,
 };
+use ic_ledger_types::{
+	AccountIdentifier, Memo, Tokens, TransferArgs, TransferResult, DEFAULT_SUBACCOUNT,
+};
 use icp_perun::{test, types::*};
 use log::{error, info};
-use ring::{rand::SystemRandom, signature::Ed25519KeyPair};
 use std::{env, error, result::Result, time::Duration};
 
 type Error = Box<dyn error::Error + Sync + Send + 'static>;
@@ -30,6 +32,7 @@ struct Demo {
 	pub setup: test::Setup,
 	pub agent: Agent,
 	pub canister: Principal,
+	pub ledger: Principal,
 	pub delay: Delay,
 }
 
@@ -37,16 +40,16 @@ struct Demo {
 #[tokio::main]
 async fn main() {
 	pretty_env_logger::init();
-	let (canister, url) = parse_args();
+	let (canister, ledger, url) = parse_args();
 
-	if let Err(err) = walkthrough(canister, url).await {
+	if let Err(err) = walkthrough(canister, ledger, url).await {
 		error!("{}", err);
 	}
 }
 
 /// Walkthrough through the collaborative Perun protocol.
-async fn walkthrough(cid: Principal, url: String) -> Result<(), Error> {
-	let mut demo = Demo::new(cid, url, true).await?;
+async fn walkthrough(cid: Principal, lid: Principal, url: String) -> Result<(), Error> {
+	let mut demo = Demo::new(cid, lid, url, true).await?;
 	let (alice, bob) = (0, 1);
 
 	// Query on-chain balances.
@@ -76,7 +79,12 @@ async fn walkthrough(cid: Principal, url: String) -> Result<(), Error> {
 }
 
 impl Demo {
-	async fn new(canister: Principal, url: String, finalized: bool) -> Result<Self, Error> {
+	async fn new(
+		canister: Principal,
+		ledger: Principal,
+		url: String,
+		finalized: bool,
+	) -> Result<Self, Error> {
 		let agent = Agent::builder()
 			.with_transport(ReqwestHttpReplicaV2Transport::create(url)?)
 			.with_identity(create_identity())
@@ -91,6 +99,7 @@ impl Demo {
 			setup: test::Setup::new(finalized, false),
 			agent,
 			canister,
+			ledger,
 			delay,
 		})
 	}
@@ -101,9 +110,54 @@ impl Demo {
 			"Depositing       channel: {} for peer IDx: {}, add: {} ICP",
 			fid.channel, part, amount
 		);
+
+		let mut amount_str = amount.to_string();
+		amount_str.retain(|c| c != '_');
+		let amount_u64 = amount_str.parse::<u64>().unwrap();
+
+		let bytes = self
+			.agent
+			.update(&self.ledger, "transfer")
+			.with_arg(
+				Encode!(&TransferArgs {
+					memo: Memo(fid.memo()),
+					amount: Tokens::from_e8s(amount_u64),
+					fee: Tokens::from_e8s(0),
+					from_subaccount: None,
+					to: AccountIdentifier::new(
+						&L1Account::from_text(self.canister.to_string()).unwrap(),
+						&DEFAULT_SUBACCOUNT
+					),
+					created_at_time: None,
+				})
+				.unwrap(),
+			)
+			.call_and_wait(self.delay.clone())
+			.await?;
+		let transfer_result = Some(Decode!(&bytes, TransferResult).unwrap());
+		let block = transfer_result.unwrap().expect("transfer should not fail");
+		info!("notifying canister of receipt {}", block);
+		info!(
+			"received: {}",
+			Decode!(
+			&self.agent.update(&self.canister, "transaction_notification")
+				.with_arg(Encode!(&block).unwrap())
+				.call_and_wait(self.delay.clone())
+				.await?,
+			icp_perun::error::Result<Amount>)
+			.unwrap()
+			.map_or_else(|e| e.to_string(), |n| n.to_string())
+		);
+		info!("notifying canister of receipt (again ;) )");
 		self.agent
-			.update(&self.canister, "deposit_mocked")
-			.with_arg(encode_args((&fid, &amount)).unwrap())
+			.update(&self.canister, "transaction_notification")
+			.with_arg(Encode!(&block).unwrap())
+			.call_and_wait(self.delay.clone())
+			.await?;
+		info!("triggering deposit");
+		self.agent
+			.update(&self.canister, "deposit")
+			.with_arg(Encode!(&fid).unwrap())
 			.call_and_wait(self.delay.clone())
 			.await?;
 		Ok(())
@@ -155,7 +209,10 @@ impl Demo {
 			part
 		);
 		// Use the Canister ID here as receiver since the funds are currently mocked.
-		let (req, auth) = self.setup.withdrawal_to(part, self.canister);
+		let (req, auth) = self.setup.withdrawal_to(
+			part,
+			L1Account::from_text(self.agent.get_principal().unwrap().to_string()).unwrap(),
+		);
 		self.agent
 			.update(&self.canister, "withdraw_mocked")
 			.with_arg(encode_args((&req, &auth)).unwrap())
@@ -165,28 +222,35 @@ impl Demo {
 	}
 }
 
-/// First arg must be a canister ID, eg: "rrkah-fqaaa-aaaaa-aaaaq-cai".
-/// Second arg can be a ICP chain url, defaults to "http://localhost:8000/".
-fn parse_args() -> (Principal, String) {
-	let cid = env::args()
-		.skip(1)
-		.next()
-		.expect("Need canister ID as first arg");
+/// First arg can be a ICP chain url, defaults to "http://localhost:8000/".
+fn parse_args() -> (Principal, Principal, String) {
+	let cid = env::var("ICP_PERUN_PRINCIPAL").expect("Need canister ID");
+	let lid = env::var("ICP_LEDGER_PRINCIPAL").expect("Need ledger ID");
 	let url = env::args()
 		.skip(2)
 		.next()
 		.unwrap_or("http://localhost:8000/".into());
 	info!("URL: {}", url);
 	info!("Canister ID: {}", cid);
-	(Principal::from_text(cid).unwrap(), url)
+	info!("ICP ledger ID: {}", lid);
+	(
+		Principal::from_text(cid).unwrap(),
+		Principal::from_text(lid).unwrap(),
+		url,
+	)
 }
 
 /// Creates a random on-chain identity for making calls.
 fn create_identity() -> impl Identity {
-	let rng = SystemRandom::new();
+	/*let rng = SystemRandom::new();
 	let rng_data = Ed25519KeyPair::generate_pkcs8(&rng).expect("Could not generate a key pair.");
 
 	BasicIdentity::from_key_pair(
 		Ed25519KeyPair::from_pkcs8(rng_data.as_ref()).expect("Could not read the key pair."),
+	)*/
+
+	BasicIdentity::from_pem_file(
+		std::env::var("HOME").unwrap() + "/.config/dfx/identity/minter/identity.pem",
 	)
+	.expect("loading default identity")
 }

@@ -1,4 +1,4 @@
-//  Copyright 2021 PolyCrypt GmbH
+//  Copyright 2021, 2022 PolyCrypt GmbH
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -97,7 +97,10 @@ impl Setup {
 		let state = State {
 			channel: params.id(),
 			version: rand.rand_u64(),
-			allocation: vec![rand.rand_u64().into(), rand.rand_u64().into()],
+			allocation: vec![
+				(rand.rand_u64() >> 20).into(),
+				(rand.rand_u64() >> 20).into(),
+			],
 			finalized,
 		};
 

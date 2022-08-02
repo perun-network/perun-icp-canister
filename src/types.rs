@@ -30,7 +30,7 @@ use serde_bytes::ByteBuf;
 
 // Type definitions start here.
 
-#[derive(PartialEq, Debug, Eq, Default, Clone)]
+#[derive(PartialEq, Debug, Eq, PartialOrd, Ord, Default, Clone)]
 /// A hash as used by the signature scheme.
 pub struct Hash(pub digest::Output<Hasher>);
 

@@ -12,9 +12,9 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use crate::types::{Amount, Hash};
+use crate::types::Amount;
 use async_trait::async_trait;
-use ic_cdk::export::candid::{CandidType, Deserialize, Encode};
+use ic_cdk::export::candid::{CandidType, Deserialize};
 use ic_cdk::export::Principal;
 use ic_ledger_types::{
 	query_archived_blocks, query_blocks, AccountIdentifier, Block, GetBlocksArgs, Operation,
@@ -27,6 +27,22 @@ pub const MAINNET_ICP_LEDGER: &str = "ryjl3-tyaaa-aaaaa-aaaba-cai";
 pub type Memo = u64;
 pub type BlockHeight = u64;
 
+/// ICP token handling errors.
+#[derive(PartialEq, Eq, CandidType, Deserialize, Debug)]
+pub enum ICPReceiverError {
+	TransactionType,
+	Recipient,
+	DuplicateTransaction,
+	FailedToQuery,
+}
+
+impl std::fmt::Display for ICPReceiverError {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		std::fmt::Debug::fmt(self, f)
+	}
+}
+
+/// ICP transaction receiver for receiving and tracking payments for separate purposes.
 pub struct Receiver<Q: TXQuerier> {
 	tx_querier: Q,
 	my_account: AccountIdentifier,
@@ -34,34 +50,49 @@ pub struct Receiver<Q: TXQuerier> {
 	unspent: BTreeMap<Memo, Amount>,  // received tokens per memo
 }
 
+/// ICP transaction querier.
 #[async_trait]
 pub trait TXQuerier {
-	async fn query_tx(&self, block_height: u64) -> Option<TransactionNotification>;
+	/// Allows the
+	async fn query_tx(&self, block_height: BlockHeight) -> Result<TransactionNotification, ICPReceiverError>;
 }
 
+/// Mocked ICP transaction querier for simulation and testing purposes.
 #[derive(Default)]
 pub struct MockTXQuerier {
-	txs: BTreeMap<u64, TransactionNotification>,
+	txs: BTreeMap<BlockHeight, TransactionNotification>,
 }
 
 #[async_trait]
 impl TXQuerier for MockTXQuerier {
-	async fn query_tx(&self, block_height: u64) -> Option<TransactionNotification> {
-		self.txs.get(&block_height).cloned()
+	async fn query_tx(&self, block_height: BlockHeight) -> Result<TransactionNotification, ICPReceiverError> {
+		self.txs.get(&block_height).cloned().ok_or(ICPReceiverError::FailedToQuery)
 	}
 }
 
+impl MockTXQuerier {
+	/// Inserts a transaction so that it can be read via query_tx().
+	pub fn register_tx(&mut self, block_height: BlockHeight, tx: TransactionNotification) {
+		self.txs.insert(block_height, tx);
+	}
+}
+
+/// Real ICP transaction querier using inter-canister calls to the ICP ledger.
 pub struct CanisterTXQuerier {
 	icp_ledger: Principal,
 }
 
 #[async_trait]
 impl TXQuerier for CanisterTXQuerier {
-	async fn query_tx(&self, block_height: BlockHeight) -> Option<TransactionNotification> {
+	async fn query_tx(&self, block_height: BlockHeight) -> Result<TransactionNotification, ICPReceiverError> {
 		if let Some(block) = self.get_block_from_ledger(block_height).await {
-			return TransactionNotification::from_tx(block.transaction);
+			if let Some(tx) = TransactionNotification::from_tx(block.transaction) {
+				return Ok(tx);
+			} else {
+				return Err(ICPReceiverError::TransactionType);
+			}
 		}
-		None
+		Err(ICPReceiverError::FailedToQuery)
 	}
 }
 
@@ -70,6 +101,14 @@ impl CanisterTXQuerier {
 		Self { icp_ledger: ledger }
 	}
 
+	/// Constructs a new canister TX querier targeting the mainnet ICP ledger canister.
+	pub fn for_mainnet() -> Self {
+		Self {
+			icp_ledger: Principal::from_text(MAINNET_ICP_LEDGER).unwrap(),
+		}
+	}
+
+	/// Queries a block from the ICP ledger's internal blockchain.
 	async fn get_block_from_ledger(&self, block_height: BlockHeight) -> Option<Block> {
 		let args = GetBlocksArgs {
 			start: block_height,
@@ -97,6 +136,7 @@ impl<Q> Receiver<Q>
 where
 	Q: TXQuerier,
 {
+	/// Creates a new transaction receiver for the specified canister principal.
 	pub fn new(q: Q, my_principal: Principal) -> Self {
 		Self {
 			tx_querier: q,
@@ -106,28 +146,45 @@ where
 		}
 	}
 
-	/// Verifies a transaction, and if it is valid and new, tracks its funds.
-	pub async fn verify(&mut self, block_height: BlockHeight) -> bool {
+	/// Verifies a transaction, and if it's valid and new, tracks its funds and
+	/// returns its amount.
+	pub async fn verify(
+		&mut self,
+		block_height: BlockHeight,
+	) -> std::result::Result<Amount, ICPReceiverError> {
 		if self.known_txs.contains(&block_height) {
-			return false;
+			return Err(ICPReceiverError::DuplicateTransaction);
 		}
 
-		if let Some(tx) = self.tx_querier.query_tx(block_height).await {
-			if !self.known_txs.insert(block_height) {
-				return false;
-			}
-			if tx.to != self.my_account {
-				return false;
-			}
-			*self.unspent.entry(tx.memo).or_insert(0.into()) += tx.get_amount();
-			return true;
+		match self.tx_querier.query_tx(block_height).await {
+			Ok(tx) => {
+				if !self.known_txs.insert(block_height) {
+					return Err(ICPReceiverError::DuplicateTransaction);
+				}
+				if tx.to != self.my_account {
+					return Err(ICPReceiverError::Recipient);
+				}
+				*self.unspent.entry(tx.memo).or_insert(0.into()) += tx.get_amount();
+
+				Ok(tx.get_amount())
+			},
+			Err(e) => Err(e)
 		}
-		false
 	}
 
 	/// Withdraws all funds from the requested memo.
 	pub fn drain(&mut self, memo: Memo) -> Amount {
 		return self.unspent.remove(&memo).unwrap_or(0.into()).into();
+	}
+
+	/// Withdraws all funds from the requested memo if it is above a threshold.
+	pub fn drain_if_at_least(&mut self, memo: Memo, amount: Amount) -> Option<Amount> {
+		if let Some(sum) = self.unspent.get(&memo) {
+			if sum >= &amount {
+				return self.unspent.remove(&memo).unwrap().into();
+			}
+		}
+		None
 	}
 }
 
@@ -136,10 +193,11 @@ where
 pub struct TransactionNotification {
 	pub to: AccountIdentifier,
 	pub amount: u64,
-	pub memo: u64,
+	pub memo: Memo,
 }
 
 impl TransactionNotification {
+	/// Creates a transaction notification from an ICP ledger transaction. If the transaction is neither a transfer nor a mint, returns nothing.
 	pub fn from_tx(tx: Transaction) -> Option<Self> {
 		if tx.operation.is_none() {
 			return None;
@@ -153,15 +211,19 @@ impl TransactionNotification {
 					memo: tx.memo.0,
 				});
 			}
+			Operation::Mint { to, amount, .. } => {
+				return Some(Self {
+					to: to,
+					amount: amount.e8s(),
+					memo: tx.memo.0,
+				});
+			}
 			_ => (),
 		}
 		None
 	}
 
-	pub fn hash(&self) -> Hash {
-		Hash::digest(&Encode!(self).unwrap())
-	}
-
+	/// Returns the transaction's amount.
 	pub fn get_amount(&self) -> Amount {
 		self.amount.into()
 	}
