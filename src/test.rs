@@ -1,4 +1,4 @@
-//  Copyright 2021 PolyCrypt GmbH
+//  Copyright 2021, 2022 PolyCrypt GmbH
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 use candid::Encode;
 use ed25519_dalek::{ExpandedSecretKey, SecretKey};
+use ic_cdk::export::Principal;
 use oorandom::Rand64 as Prng;
 use std::time::SystemTime;
 
@@ -28,7 +29,7 @@ use crate::{types::*, CanisterState};
 pub struct Setup {
 	pub parts: Vec<L2Account>,
 	pub secrets: Vec<ExpandedSecretKey>,
-	pub canister: CanisterState,
+	pub canister: CanisterState<crate::icp::MockTXQuerier>,
 	pub params: Params,
 	pub state: State,
 	pub prng: Prng,
@@ -96,14 +97,17 @@ impl Setup {
 		let state = State {
 			channel: params.id(),
 			version: rand.rand_u64(),
-			allocation: vec![rand.rand_u64().into(), rand.rand_u64().into()],
+			allocation: vec![
+				(rand.rand_u64() >> 20).into(),
+				(rand.rand_u64() >> 20).into(),
+			],
 			finalized,
 		};
 
 		let mut s = Setup {
 			parts,
 			secrets,
-			canister: Default::default(),
+			canister: CanisterState::new(Default::default(), Principal::anonymous()),
 			params,
 			state,
 			prng: rand,

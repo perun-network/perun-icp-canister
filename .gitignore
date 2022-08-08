@@ -12,3 +12,6 @@
 
 # rust build files
 /target/
+
+dfx.json
+/ledger.*

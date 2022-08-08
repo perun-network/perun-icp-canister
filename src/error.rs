@@ -1,4 +1,4 @@
-//  Copyright 2021 PolyCrypt GmbH
+//  Copyright 2021, 2022 PolyCrypt GmbH
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use ic_cdk::export::candid::CandidType;
+use ic_cdk::export::candid::{CandidType, Deserialize};
 
 #[macro_export]
 macro_rules! require {
@@ -28,7 +28,7 @@ macro_rules! require {
 	};
 }
 
-#[derive(PartialEq, Eq, CandidType, Debug)]
+#[derive(PartialEq, Eq, CandidType, Deserialize, Debug)]
 /// Contains all errors that can occur during an operation on the Perun
 /// canister.
 pub enum Error {
@@ -46,7 +46,15 @@ pub enum Error {
 	/// When a state that is registered for dispute is older than the previously
 	/// registered state.
 	OutdatedState,
+	/// Error while interaction with the ledger.
+	LedgerError,
+	/// Error receiving ICP tokens.
+	ReceiverError(crate::icp::ICPReceiverError)
 }
-
+impl std::fmt::Display for Error {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		std::fmt::Debug::fmt(self, f)
+	}
+}
 /// Canister operation result type.
 pub type Result<T> = core::result::Result<T, Error>;
