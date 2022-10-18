@@ -54,7 +54,10 @@ pub struct Receiver<Q: TXQuerier> {
 #[async_trait]
 pub trait TXQuerier {
 	/// Allows the
-	async fn query_tx(&self, block_height: BlockHeight) -> Result<TransactionNotification, ICPReceiverError>;
+	async fn query_tx(
+		&self,
+		block_height: BlockHeight,
+	) -> Result<TransactionNotification, ICPReceiverError>;
 }
 
 /// Mocked ICP transaction querier for simulation and testing purposes.
@@ -65,8 +68,14 @@ pub struct MockTXQuerier {
 
 #[async_trait]
 impl TXQuerier for MockTXQuerier {
-	async fn query_tx(&self, block_height: BlockHeight) -> Result<TransactionNotification, ICPReceiverError> {
-		self.txs.get(&block_height).cloned().ok_or(ICPReceiverError::FailedToQuery)
+	async fn query_tx(
+		&self,
+		block_height: BlockHeight,
+	) -> Result<TransactionNotification, ICPReceiverError> {
+		self.txs
+			.get(&block_height)
+			.cloned()
+			.ok_or(ICPReceiverError::FailedToQuery)
 	}
 }
 
@@ -84,7 +93,10 @@ pub struct CanisterTXQuerier {
 
 #[async_trait]
 impl TXQuerier for CanisterTXQuerier {
-	async fn query_tx(&self, block_height: BlockHeight) -> Result<TransactionNotification, ICPReceiverError> {
+	async fn query_tx(
+		&self,
+		block_height: BlockHeight,
+	) -> Result<TransactionNotification, ICPReceiverError> {
 		if let Some(block) = self.get_block_from_ledger(block_height).await {
 			if let Some(tx) = TransactionNotification::from_tx(block.transaction) {
 				return Ok(tx);
@@ -167,8 +179,8 @@ where
 				*self.unspent.entry(tx.memo).or_insert(0.into()) += tx.get_amount();
 
 				Ok(tx.get_amount())
-			},
-			Err(e) => Err(e)
+			}
+			Err(e) => Err(e),
 		}
 	}
 

@@ -49,7 +49,7 @@ pub enum Error {
 	/// Error while interaction with the ledger.
 	LedgerError,
 	/// Error receiving ICP tokens.
-	ReceiverError(crate::icp::ICPReceiverError)
+	ReceiverError(crate::icp::ICPReceiverError),
 }
 impl std::fmt::Display for Error {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {

@@ -140,11 +140,14 @@ impl Demo {
 		info!(
 			"received: {}",
 			Decode!(
-			&self.agent.update(&self.canister, "transaction_notification")
-				.with_arg(Encode!(&block).unwrap())
-				.call_and_wait(self.delay.clone())
-				.await?,
-			icp_perun::error::Result<Amount>)
+				&self
+					.agent
+					.update(&self.canister, "transaction_notification")
+					.with_arg(Encode!(&block).unwrap())
+					.call_and_wait(self.delay.clone())
+					.await?,
+				icp_perun::error::Result<Amount>
+			)
 			.unwrap()
 			.map_or_else(|e| e.to_string(), |n| n.to_string())
 		);

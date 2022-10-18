@@ -215,10 +215,7 @@ where
 
 	/// Call this to process an ICP transaction and register the funds for
 	/// further use.
-	pub async fn process_icp_tx(
-		&mut self,
-		tx: icp::BlockHeight,
-	) -> Result<Amount> {
+	pub async fn process_icp_tx(&mut self, tx: icp::BlockHeight) -> Result<Amount> {
 		match self.icp_receiver.verify(tx).await {
 			Ok(v) => Ok(v),
 			Err(e) => Err(Error::ReceiverError(e)),
