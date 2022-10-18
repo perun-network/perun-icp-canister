@@ -14,16 +14,11 @@ In the future, it will connect to the [go-perun](https://github.com/hyperledger-
 
 ## :warning: Current Limitations
 
-We have mocked all token interactions because
-[the ICP ledger canister does not allow arbitrary canisters to send ICP or listen for received ICP](https://forum.dfinity.org/t/integrating-with-the-internet-computer-ledger/2542) (expected to be available [after this grant](https://forum.dfinity.org/t/enable-canisters-to-hold-icp/6153/113)), and there are [no established fungible token standards](https://forum.dfinity.org/t/receiving-icp-in-canister/5329/6) yet (some promising ones are [already in development](https://forum.dfinity.org/t/thoughts-on-the-token-standard/4694/94), though):
-
-* `deposit()` just takes the deposited amount as a number argument, currently trusting the value to be correct.
-* `withdraw()` returns the withdrawn amount as a number, instead of actually sending any currency anywhere.
-
+Currently, the canister only supports ICP tokens.
 Once a token standard or ICP token interactions are live, the code can be easily
 adapted to work with those.
 
-Additionally, while the client-side logic for our channel framework is implemented, the IC adapter for the `go-perun` library is not part of this grant's scope.
+Additionally, the client-side logic for our channel framework is not fully covered by this grant's scope.
 
 ## Protocol
 
@@ -108,7 +103,7 @@ INFO  happy_walkthrough > Querying deposit channel: 0x920c7366… for peer IDx: 
 
 ## Copyright
 
-Copyright 2021 - See [NOTICE file](NOTICE) for copyright holders.
+Copyright 2021 - 2022 - See [NOTICE file](NOTICE) for copyright holders.
 Use of the source code is governed by the Apache 2.0 license that can be found in the [LICENSE file](LICENSE).
 
 Contact us at [info@perun.network](mailto:info@perun.network).
