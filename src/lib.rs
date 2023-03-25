@@ -124,6 +124,7 @@ async fn withdraw_mocked(
 	(result.as_ref().ok().cloned(), result.err())
 }
 
+
 async fn withdraw_impl(request: WithdrawalRequest, auth: L2Signature) -> Result<icp::BlockHeight> {
 	let receiver = request.receiver.clone();
 	let funding = request.funding.clone();
@@ -135,8 +136,12 @@ async fn withdraw_impl(request: WithdrawalRequest, auth: L2Signature) -> Result<
 	amount_str.retain(|c| c != '_');
 	let amount_u64 = amount_str.parse::<u64>().unwrap();
 
+	let prince = Principal::from_text(icp::MAINNET_ICP_LEDGER).unwrap();
+
+	println!("Principal: {:?}", prince);
+
 	match ic_ledger_types::transfer(
-		Principal::from_text(icp::MAINNET_ICP_LEDGER).unwrap(),
+		prince,
 		TransferArgs {
 			memo: Memo(0),
 			amount: Tokens::from_e8s(amount_u64),
@@ -162,12 +167,39 @@ async fn withdraw_impl(request: WithdrawalRequest, auth: L2Signature) -> Result<
 	}
 }
 
+
+
 #[ic_cdk_macros::query]
 /// Returns the funds deposited for a channel's specified participant, if any.
 /// this function should be used to check whether all participants have
 /// deposited their owed funds into a channel to ensure it is fully funded.
 fn query_holdings(funding: Funding) -> Option<Amount> {
 	STATE.read().unwrap().query_holdings(funding)
+}
+
+#[ic_cdk_macros::query]
+/// Returns the memo specific for a channel's participant.
+/// this function should be used to check whether all participants have
+/// deposited their owed funds into a channel to ensure it is fully funded.
+fn query_fid(funding: Funding) -> Option<Memo> {
+    STATE.read().unwrap().show_fid(funding)
+}
+
+#[ic_cdk_macros::query]
+/// Returns the funding and memo specific for a channel's participant.
+/// this function should be used to check whether all participants have
+/// deposited their owed funds into a channel to ensure it is fully funded.
+fn query_funding_memo(funding: Funding) -> Option<(Funding, Memo)> {
+	let mem: u64 = funding.memo();
+	Some((funding.clone(), ic_ledger_types::Memo(mem)))
+}
+
+#[ic_cdk_macros::query]
+/// Returns the funding specific for a channel's participant.
+/// this function should be used to check whether all participants have
+/// deposited their owed funds into a channel to ensure it is fully funded.
+fn query_funding(funding: Funding) -> Option<Funding> {
+    Some(funding.clone())
 }
 
 #[ic_cdk_macros::query]
@@ -224,6 +256,11 @@ where
 
 	pub fn query_holdings(&self, funding: Funding) -> Option<Amount> {
 		self.holdings.get(&funding).cloned()
+	}
+
+	pub fn show_fid(&self, funding: Funding) -> Option<Memo> {
+		let mem: u64 = funding.memo();
+		Some(ic_ledger_types::Memo(mem))
 	}
 
 	/// Queries a registered state.

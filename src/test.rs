@@ -85,6 +85,7 @@ impl Setup {
 	pub fn with_rng(mut rand: Prng, finalized: bool, funded: bool) -> Self {
 		let key0 = rand_key(&mut rand);
 		let key1 = rand_key(&mut rand);
+
 		let parts = vec![key0.1, key1.1];
 		let secrets = vec![key0.0, key1.0];
 
@@ -137,6 +138,7 @@ impl Setup {
 	/// Returns the funding for a participant.
 	pub fn funding(&self, part: usize) -> Funding {
 		Funding::new(self.params.id(), self.parts[part].clone())
+
 	}
 
 	/// Creates a signed withdrawal request of the setup's channel for a given

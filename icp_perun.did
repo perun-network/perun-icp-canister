@@ -20,6 +20,7 @@ type Hash = vec nat8;
 type Nonce = Hash;
 type ChannelId = Hash;
 type Amount = nat;
+type Memo = nat64;
 
 type Funding = record { channel: ChannelId; participant: L2Account; };
 
@@ -58,6 +59,8 @@ service : {
 	"dispute": (Params, FullySignedState) -> (opt Error);
 	"query_state": (ChannelId) -> (opt RegisteredState);
 	"withdraw": (WithdrawalRequest, blob) -> (opt Amount, opt Error);
-
+	"query_fid": (Funding) -> (opt Memo) query;
 	"transaction_notification": (nat64) -> ();
+	"query_funding": (Funding) -> (opt Funding) query;
+	"query_funding_memo": (Funding) -> (opt Funding, opt Memo) query;
 }

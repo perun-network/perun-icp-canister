@@ -11,19 +11,21 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-
+ // ic_types::Principal
 use candid::{encode_args, Decode, Encode, Nat};
-use garcon::Delay;
+//use garcon::Delay;
+//use ring::signature::Ed25519KeyPair;
+//use ring::rand::SystemRandom;
 use ic_agent::{
-	agent::http_transport::ReqwestHttpReplicaV2Transport, ic_types::Principal,
-	identity::BasicIdentity, Agent, Identity,
+	agent::http_transport::ReqwestHttpReplicaV2Transport, Agent, Identity, identity::Secp256k1Identity,
 };
+use ic_cdk::export::Principal;
 use ic_ledger_types::{
 	AccountIdentifier, Memo, Tokens, TransferArgs, TransferResult, DEFAULT_SUBACCOUNT,
 };
 use icp_perun::{test, types::*};
 use log::{error, info};
-use std::{env, error, result::Result, time::Duration};
+use std::{env, error, result::Result}; //, time::Duration
 
 type Error = Box<dyn error::Error + Sync + Send + 'static>;
 
@@ -32,8 +34,7 @@ struct Demo {
 	pub setup: test::Setup,
 	pub agent: Agent,
 	pub canister: Principal,
-	pub ledger: Principal,
-	pub delay: Delay,
+	pub ledger: Principal
 }
 
 /// Entry point for this example.
@@ -51,7 +52,7 @@ async fn main() {
 async fn walkthrough(cid: Principal, lid: Principal, url: String) -> Result<(), Error> {
 	let mut demo = Demo::new(cid, lid, url, true).await?;
 	let (alice, bob) = (0, 1);
-
+	
 	// Query on-chain balances.
 	demo.query_holdings(alice).await?;
 	demo.query_holdings(bob).await?;
@@ -74,7 +75,7 @@ async fn walkthrough(cid: Principal, lid: Principal, url: String) -> Result<(), 
 	// Query on-chain balances.
 	demo.query_holdings(alice).await?;
 	demo.query_holdings(bob).await?;
-
+	print!("Demo finished successfully.");
 	Ok(())
 }
 
@@ -90,17 +91,18 @@ impl Demo {
 			.with_identity(create_identity())
 			.build()?;
 		agent.fetch_root_key().await?; // Check for dev node.
-		let delay = Delay::builder()
-			.throttle(Duration::from_millis(500))
-			.timeout(Duration::from_secs(60 * 5))
-			.build();
+		let pri = agent.get_principal()?; // Check for replica.
+		println!("Generated Principal: {}", pri);
+		// let delay = Delay::builder()
+		// 	.throttle(Duration::from_millis(500))
+		// 	.timeout(Duration::from_secs(60 * 5))
+		// 	.build();
 
 		Ok(Self {
 			setup: test::Setup::new(finalized, false),
 			agent,
 			canister,
-			ledger,
-			delay,
+			ledger
 		})
 	}
 
@@ -132,9 +134,10 @@ impl Demo {
 				})
 				.unwrap(),
 			)
-			.call_and_wait(self.delay.clone())
+			.call_and_wait()
 			.await?;
 		let transfer_result = Some(Decode!(&bytes, TransferResult).unwrap());
+		println!("transfer_result: {:?}", transfer_result);
 		let block = transfer_result.unwrap().expect("transfer should not fail");
 		info!("notifying canister of receipt {}", block);
 		info!(
@@ -144,7 +147,7 @@ impl Demo {
 					.agent
 					.update(&self.canister, "transaction_notification")
 					.with_arg(Encode!(&block).unwrap())
-					.call_and_wait(self.delay.clone())
+					.call_and_wait()
 					.await?,
 				icp_perun::error::Result<Amount>
 			)
@@ -155,13 +158,13 @@ impl Demo {
 		self.agent
 			.update(&self.canister, "transaction_notification")
 			.with_arg(Encode!(&block).unwrap())
-			.call_and_wait(self.delay.clone())
+			.call_and_wait()
 			.await?;
 		info!("triggering deposit");
 		self.agent
 			.update(&self.canister, "deposit")
 			.with_arg(Encode!(&fid).unwrap())
-			.call_and_wait(self.delay.clone())
+			.call_and_wait()
 			.await?;
 		Ok(())
 	}
@@ -200,7 +203,7 @@ impl Demo {
 		self.agent
 			.update(&self.canister, "conclude")
 			.with_arg(encode_args((&self.setup.params, &sig_state)).unwrap())
-			.call_and_wait(self.delay.clone())
+			.call_and_wait()
 			.await?;
 		Ok(())
 	}
@@ -219,7 +222,7 @@ impl Demo {
 		self.agent
 			.update(&self.canister, "withdraw_mocked")
 			.with_arg(encode_args((&req, &auth)).unwrap())
-			.call_and_wait(self.delay.clone())
+			.call_and_wait() //self.delay.clone()
 			.await?;
 		Ok(())
 	}
@@ -243,17 +246,14 @@ fn parse_args() -> (Principal, Principal, String) {
 	)
 }
 
-/// Creates a random on-chain identity for making calls.
+
+/// Loads a minter identity from a pem file.
 fn create_identity() -> impl Identity {
-	/*let rng = SystemRandom::new();
-	let rng_data = Ed25519KeyPair::generate_pkcs8(&rng).expect("Could not generate a key pair.");
 
-	BasicIdentity::from_key_pair(
-		Ed25519KeyPair::from_pkcs8(rng_data.as_ref()).expect("Could not read the key pair."),
-	)*/
-
-	BasicIdentity::from_pem_file(
-		std::env::var("HOME").unwrap() + "/.config/dfx/identity/minter/identity.pem",
+	Secp256k1Identity::from_pem_file(
+		//std::env::var("HOME").unwrap() + "/.config/dfx/identity/minter/identity.pem",
+		"./identities/identity_minter.pem",
 	)
 	.expect("loading default identity")
+
 }
