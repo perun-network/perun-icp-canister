@@ -251,8 +251,7 @@ fn parse_args() -> (Principal, Principal, String) {
 fn create_identity() -> impl Identity {
 
 	Secp256k1Identity::from_pem_file(
-		//std::env::var("HOME").unwrap() + "/.config/dfx/identity/minter/identity.pem",
-		"./identities/identity_minter.pem",
+		std::env::var("HOME").unwrap() + "/.config/dfx/identity/minter/identity.pem",
 	)
 	.expect("loading default identity")
 
