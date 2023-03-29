@@ -65,6 +65,16 @@ async fn transaction_notification(block_height: u64) -> Result<Amount> {
 }
 
 #[ic_cdk_macros::update]
+async fn deposit_memo(fundmem: FundMem) -> Option<Error> {
+	STATE
+		.write()
+		.unwrap()
+		.deposit_icp_memo(blocktime(), fundmem)
+		.await
+		.err()
+}
+
+#[ic_cdk_macros::update]
 async fn deposit(funding: Funding) -> Option<Error> {
 	STATE
 		.write()
@@ -186,19 +196,26 @@ fn query_fid(funding: Funding) -> Option<Memo> {
 }
 
 #[ic_cdk_macros::query]
+/// Returns only the memo specific for a channel.
+/// this function should be used to check whether all participants have
+/// deposited their owed funds into a channel to ensure it is fully funded.
+fn query_memo(mem: Memo) -> Option<Memo> {
+    Some(mem)
+}
+
+#[ic_cdk_macros::query]
 /// Returns the funding and memo specific for a channel's participant.
 /// this function should be used to check whether all participants have
 /// deposited their owed funds into a channel to ensure it is fully funded.
-fn query_funding_memo(funding: Funding) -> Option<(Funding, Memo)> {
-	let mem: u64 = funding.memo();
-	Some((funding.clone(), ic_ledger_types::Memo(mem)))
+fn query_funding_memo(fundmem: FundMem) -> Option<FundMem> {
+    Some(fundmem)
 }
 
 #[ic_cdk_macros::query]
 /// Returns the funding specific for a channel's participant.
 /// this function should be used to check whether all participants have
 /// deposited their owed funds into a channel to ensure it is fully funded.
-fn query_funding(funding: Funding) -> Option<Funding> {
+fn query_funding_only(funding: Funding) -> Option<Funding> {
     Some(funding.clone())
 }
 
@@ -222,6 +239,31 @@ where
 	}
 	pub fn deposit(&mut self, funding: Funding, amount: Amount) -> Result<()> {
 		*self.holdings.entry(funding).or_insert(Default::default()) += amount;
+		Ok(())
+	}
+
+	/// Call this to access funds deposited and previously registered - memo is in the input already
+	pub async fn deposit_icp_memo(&mut self, time: Timestamp, fundmem: FundMem) -> Result<()> {
+
+		let funding = Funding {
+			channel: fundmem.channel.clone(),
+			participant: fundmem.participant.clone(),
+		};
+		let amount = self.icp_receiver.drain(fundmem.memo.0);
+
+		self.deposit(funding.clone(), amount)?;
+		events::STATE
+			.write()
+			.unwrap()
+			.register_event(
+				time,
+				funding.channel.clone(),
+				Event::Funded {
+					who: funding.participant.clone(),
+					total: self.holdings.get(&funding).cloned().ok_or(Error::Authentication)?, // here include unwrap_or for error handling/propagation
+				},
+			)
+			.await;
 		Ok(())
 	}
 

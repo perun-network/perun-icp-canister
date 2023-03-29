@@ -27,6 +27,7 @@ pub use ic_cdk::export::candid::{
 };
 use serde::de::{Deserializer, Error as _};
 use serde_bytes::ByteBuf;
+use ic_ledger_types::Memo;
 
 // Type definitions start here.
 
@@ -128,6 +129,18 @@ pub struct Funding {
 	/// The funds' owner's layer-2 identity within the channel.
 	pub participant: L2Account,
 }
+
+#[derive(PartialEq, Clone, Deserialize, Eq, Hash, CandidType)]
+/// Identifies the funds belonging to a certain layer 2 identity within a
+/// certain channel.
+pub struct FundMem {
+	/// The channel's unique identifier.
+	pub channel: ChannelId,
+	/// The funds' owner's layer-2 identity within the channel.
+	pub participant: L2Account,
+	pub memo: Memo,
+}
+
 
 // Hash
 

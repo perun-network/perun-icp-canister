@@ -36,6 +36,11 @@ fn query_events(ch: ChannelId, start: Timestamp) -> Vec<Event> {
 	STATE.read().unwrap().events_after(&ch, start)
 }
 
+// #[ic_cdk_macros::query]
+// fn query_events(ch: ChannelId) -> Vec<Event> {
+// 	STATE.read().unwrap().events_after(&ch, 0)
+// }
+
 #[derive(Clone, CandidType, Deserialize)]
 pub enum Event {
 	/// A participant supplied funds into the channel.
