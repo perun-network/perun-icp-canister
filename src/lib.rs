@@ -260,7 +260,7 @@ where
 				funding.channel.clone(),
 				Event::Funded {
 					who: funding.participant.clone(),
-					total: self.holdings.get(&funding).cloned().ok_or(Error::Authentication)?, // here include unwrap_or for error handling/propagation
+					total: self.holdings.get(&funding).cloned().unwrap(), // here include unwrap_or for error handling/propagation
 				},
 			)
 			.await;

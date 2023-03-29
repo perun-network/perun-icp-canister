@@ -66,8 +66,7 @@ service : {
 	"query_fid": (Funding) -> (opt Memo) query;
 	"transaction_notification": (nat64) -> ();
 	"query_funding_only": (Funding) -> (opt Funding) query;
-	//"query_funding_memo": (Funding, Memo) -> (opt Funding, opt Memo) query;
 	"query_funding_memo": (FundMem) -> (opt FundMem) query;
-	//"query_events": (ChannelId) -> (vec Events) query;
+	"query_events": (ChannelId) -> (vec Events) query;
 
 }
