@@ -16,6 +16,19 @@ use crate::*;
 use assert::assert_ok;
 
 #[test]
+fn save_candid() {
+	use super::export_candid;
+	use std::env;
+	use std::fs::{create_dir_all, write};
+	use std::path::PathBuf;
+
+	let dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+	create_dir_all(&dir).expect("Failed to create directory.");
+
+	write(dir.join("aaaa.did"), export_candid()).expect("Write failed.");
+}
+
+#[test]
 /// Tests that repeated deposits are added correctly and that only the specified
 /// participant is credited. Also tests the `query_holdings()` method.
 fn test_deposit() {
@@ -48,7 +61,7 @@ fn test_deposit() {
 fn test_conclude() {
 	let mut s = test::Setup::new(true, true);
 	let sstate = s.sign_state();
-	assert_ok!(s.canister.conclude(s.params, sstate, 0));
+	assert_ok!(s.canister.conclude_can(s.params, sstate, 0));
 }
 
 #[test]
@@ -57,7 +70,7 @@ fn test_conclude_nonfinal() {
 	let mut s = test::Setup::new(false, true);
 	let sstate = s.sign_state();
 	assert_eq!(
-		s.canister.conclude(s.params, sstate, 0),
+		s.canister.conclude_can(s.params, sstate, 0),
 		Err(Error::NotFinalized)
 	);
 }
@@ -69,7 +82,7 @@ fn test_conclude_invalid_params() {
 	let sstate = s.sign_state();
 	s.params.challenge_duration += 1;
 	assert_eq!(
-		s.canister.conclude(s.params, sstate, 0),
+		s.canister.conclude_can(s.params, sstate, 0),
 		Err(Error::InvalidInput)
 	);
 }
@@ -80,7 +93,7 @@ fn test_conclude_not_signed() {
 	let mut s = test::Setup::new(true, true);
 	let sstate = s.sign_state_invalid();
 	assert_eq!(
-		s.canister.conclude(s.params, sstate, 0),
+		s.canister.conclude_can(s.params, sstate, 0),
 		Err(Error::Authentication)
 	);
 }
@@ -92,7 +105,7 @@ fn test_conclude_insufficient_funds() {
 	s.state.allocation[0] += 1000;
 	let sstate = s.sign_state();
 	assert_eq!(
-		s.canister.conclude(s.params, sstate, 0),
+		s.canister.conclude_can(s.params, sstate, 0),
 		Err(Error::InsufficientFunding)
 	);
 }
@@ -104,7 +117,7 @@ fn test_conclude_invalid_allocation() {
 	s.state.allocation.push(5.into());
 	let signed = s.sign_state();
 	assert_eq!(
-		s.canister.conclude(s.params, signed, 0),
+		s.canister.conclude_can(s.params, signed, 0),
 		Err(Error::InvalidInput)
 	);
 }
@@ -117,7 +130,7 @@ fn test_dispute_nonfinal() {
 	let now = 0;
 	let channel = s.params.id();
 	let sstate = s.sign_state();
-	assert_ok!(s.canister.dispute(s.params, sstate, now));
+	assert_ok!(s.canister.dispute_can(s.params, sstate, now));
 	assert!(!s.canister.state(&channel).unwrap().settled(now));
 }
 
@@ -129,7 +142,7 @@ fn test_dispute_final() {
 	let mut s = test::Setup::new(true, true);
 	let channel = s.params.id();
 	let sstate = s.sign_state();
-	assert_ok!(s.canister.dispute(s.params, sstate, time));
+	assert_ok!(s.canister.dispute_can(s.params, sstate, time));
 	assert!(s.canister.state(&channel).unwrap().settled(time));
 }
 
@@ -141,11 +154,11 @@ fn test_dispute_valid_refutation() {
 	let mut s = test::Setup::new(false, true);
 	let channel = s.params.id();
 	let mut sstate = s.sign_state();
-	assert_ok!(s.canister.dispute(s.params.clone(), sstate, time));
+	assert_ok!(s.canister.dispute_can(s.params.clone(), sstate, time));
 	s.state.version += 1;
 	s.state.finalized = true;
 	sstate = s.sign_state();
-	assert_ok!(s.canister.dispute(s.params, sstate, time));
+	assert_ok!(s.canister.dispute_can(s.params, sstate, time));
 	assert!(s.canister.state(&channel).unwrap().settled(time));
 }
 
@@ -158,11 +171,11 @@ fn test_dispute_outdated_refutation() {
 	let channel = s.params.id();
 	s.state.version = version;
 	let mut sstate = s.sign_state();
-	assert_ok!(s.canister.dispute(s.params.clone(), sstate, time));
+	assert_ok!(s.canister.dispute_can(s.params.clone(), sstate, time));
 	s.state.version -= 1;
 	sstate = s.sign_state();
 	assert_eq!(
-		s.canister.dispute(s.params, sstate, time),
+		s.canister.dispute_can(s.params, sstate, time),
 		Err(Error::OutdatedState)
 	);
 	assert!(!s.canister.state(&channel).unwrap().settled(time));
@@ -178,11 +191,11 @@ fn test_dispute_settled_refutation() {
 	let channel = s.params.id();
 	s.state.version = version;
 	let mut sstate = s.sign_state();
-	assert_ok!(s.canister.conclude(s.params.clone(), sstate, time));
+	assert_ok!(s.canister.conclude_can(s.params.clone(), sstate, time));
 	s.state.version += 1;
 	sstate = s.sign_state();
 	assert_eq!(
-		s.canister.dispute(s.params, sstate, time),
+		s.canister.dispute_can(s.params, sstate, time),
 		Err(Error::AlreadyConcluded)
 	);
 	assert!(s.canister.state(&channel).unwrap().settled(time));
@@ -202,12 +215,14 @@ fn test_dispute_underfunded_initial_state() {
 
 	s.state.version = 0;
 	assert_eq!(
-		s.canister.dispute(s.params.clone(), s.sign_state(), time),
+		s.canister
+			.dispute_can(s.params.clone(), s.sign_state(), time),
 		Ok(())
 	);
 	s.state.version = 1;
 	assert_eq!(
-		s.canister.dispute(s.params.clone(), s.sign_state(), time),
+		s.canister
+			.dispute_can(s.params.clone(), s.sign_state(), time),
 		Err(Error::InsufficientFunding)
 	);
 
@@ -222,10 +237,13 @@ fn test_dispute_underfunded_initial_state() {
 
 	// Withdraw the funding.
 	let (req, sig) = s.withdrawal(0);
-	assert_eq!(s.canister.withdraw(req, sig, time), Ok(amount.clone()));
+	assert_eq!(s.canister.withdraw_can(req, sig, time), Ok(amount.clone()));
 
 	let (req, sig) = s.withdrawal(1);
-	assert_eq!(s.canister.withdraw(req, sig, time), Ok(Amount::default()));
+	assert_eq!(
+		s.canister.withdraw_can(req, sig, time),
+		Ok(Amount::default())
+	);
 }
 
 #[test]
@@ -249,18 +267,18 @@ fn test_holding_tracking_none() {
 fn test_withdraw() {
 	let mut s = test::Setup::new(true, true);
 	let sstate = s.sign_state();
-	assert_ok!(s.canister.conclude(s.params.clone(), sstate, 0));
+	assert_ok!(s.canister.conclude_can(s.params.clone(), sstate, 0));
 
 	let (req, sig) = s.withdrawal(0);
 
 	let holdings = s.canister.query_holdings(s.funding(0)).unwrap();
 	assert_eq!(
-		s.canister.withdraw(req.clone(), sig.clone(), 0),
+		s.canister.withdraw_can(req.clone(), sig.clone(), 0),
 		Ok(holdings)
 	);
 
 	// Test that repeated withdraws return nothing.
-	assert_eq!(s.canister.withdraw(req, sig, 0), Ok(Amount::default()));
+	assert_eq!(s.canister.withdraw_can(req, sig, 0), Ok(Amount::default()));
 }
 
 #[test]
@@ -268,12 +286,15 @@ fn test_withdraw() {
 fn test_withdraw_invalid_sig() {
 	let mut s = test::Setup::new(true, true);
 	let sstate = s.sign_state();
-	assert_ok!(s.canister.conclude(s.params.clone(), sstate, 0));
+	assert_ok!(s.canister.conclude_can(s.params.clone(), sstate, 0));
 
 	let (req, _) = s.withdrawal(0);
 	let sig = s.sign_withdrawal(&req, 1); // sign with wrong user.
 
-	assert_eq!(s.canister.withdraw(req, sig, 0), Err(Error::Authentication));
+	assert_eq!(
+		s.canister.withdraw_can(req, sig, 0),
+		Err(Error::Authentication)
+	);
 }
 
 #[test]
@@ -282,14 +303,17 @@ fn test_withdraw_unknown_channel() {
 	let mut s = test::Setup::new(true, true);
 	let unknown_id = test::rand_hash(&mut s.prng);
 	let sstate = s.sign_state();
-	assert_ok!(s.canister.conclude(s.params.clone(), sstate, 0));
+	assert_ok!(s.canister.conclude_can(s.params.clone(), sstate, 0));
 
 	let (mut req, _) = s.withdrawal(0);
 	req.funding.channel = unknown_id;
 
 	let sig = s.sign_withdrawal(&req, 0);
 
-	assert_eq!(s.canister.withdraw(req, sig, 0), Err(Error::NotFinalized));
+	assert_eq!(
+		s.canister.withdraw_can(req, sig, 0),
+		Err(Error::NotFinalized)
+	);
 }
 
 #[test]
@@ -298,7 +322,7 @@ fn test_withdraw_not_finalized() {
 	let mut s = test::Setup::new(false, true);
 	let now = 0;
 	let sstate = s.sign_state();
-	assert_ok!(s.canister.dispute(s.params.clone(), sstate, now));
+	assert_ok!(s.canister.dispute_can(s.params.clone(), sstate, now));
 	assert!(!s
 		.canister
 		.channels
@@ -308,5 +332,8 @@ fn test_withdraw_not_finalized() {
 
 	let (req, sig) = s.withdrawal(0);
 
-	assert_eq!(s.canister.withdraw(req, sig, 0), Err(Error::NotFinalized));
+	assert_eq!(
+		s.canister.withdraw_can(req, sig, 0),
+		Err(Error::NotFinalized)
+	);
 }

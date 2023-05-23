@@ -24,16 +24,22 @@ lazy_static! {
 	pub static ref STATE: RwLock<LocalEventRegisterer> = RwLock::new(LocalEventRegisterer::new());
 }
 
-/*
 #[ic_cdk_macros::update]
+#[candid::candid_method]
 async fn register_event(ch: ChannelId, time: Timestamp, e: Event) {
 	STATE.write().unwrap().register_event(time, ch, e).await;
 }
-*/
+
+// #[ic_cdk_macros::query]
+// #[candid::candid_method(query)]
+// fn query_events(ch: ChannelId, start: Timestamp) -> Vec<Event> {
+// 	STATE.read().unwrap().events_after(&ch, start)
+// }
 
 #[ic_cdk_macros::query]
-fn query_events(ch: ChannelId, start: Timestamp) -> Vec<Event> {
-	STATE.read().unwrap().events_after(&ch, start)
+#[candid::candid_method(query)]
+fn query_events(et: ChannelTime) -> Vec<Event> {
+	STATE.read().unwrap().events_after(&et.chanid, et.time)
 }
 
 #[derive(Clone, CandidType, Deserialize)]
@@ -44,6 +50,15 @@ pub enum Event {
 	Disputed(RegisteredState),
 	/// Channel is now concluded and all funds can be withdrawn, no further updates are possible.
 	Concluded,
+}
+
+#[derive(PartialEq, Clone, Deserialize, Eq, Hash, CandidType)]
+
+pub struct ChannelTime {
+	/// The channel id.
+	chanid: ChannelId,
+	/// The time after which to return events.
+	time: Timestamp,
 }
 
 #[async_trait]
@@ -65,6 +80,7 @@ impl EventRegisterer for RPCEventRegisterer {
 }
 
 /// The event canister's state. Contains
+
 pub struct CanisterState {
 	perun_canister: Principal,
 	imple: LocalEventRegisterer,

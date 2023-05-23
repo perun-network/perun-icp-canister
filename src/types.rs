@@ -25,9 +25,9 @@ pub use ic_cdk::export::candid::{
 	types::{Serializer, Type},
 	CandidType, Deserialize, Int, Nat,
 };
+use ic_ledger_types::Memo;
 use serde::de::{Deserializer, Error as _};
 use serde_bytes::ByteBuf;
-use ic_ledger_types::Memo;
 
 // Type definitions start here.
 
@@ -86,13 +86,39 @@ pub struct State {
 	pub finalized: bool,
 }
 
-#[derive(Deserialize, CandidType, Default)]
+#[derive(Deserialize, CandidType, Default, Clone)]
 /// A channel state, signed by all participants.
 pub struct FullySignedState {
 	/// The channel's state.
 	pub state: State,
 	/// The channel's participants' signatures on the channel state, in the
 	/// order of the parameters' participant list.
+	pub sigs: Vec<L2Signature>,
+}
+
+#[derive(Deserialize, CandidType, Default)]
+/// Everything we need to conclude a channel
+pub struct ConcludeRequest {
+	/// The channel's params.
+	pub nonce: Nonce,
+	/// The channel's participants' layer-2 identities.
+	pub participants: Vec<L2Account>,
+	/// When a dispute occurs, how long to wait for responses.
+	pub challenge_duration: Duration,
+	/// The channel's state.
+	/// The cannel's unique identifier.
+	pub channel: ChannelId,
+	/// The channel's current state revision number.
+	pub version: Version,
+	/// The channel's asset allocation. Contains each participant's current
+	/// balance in the order of the channel parameters' participant list.
+	pub allocation: Vec<Amount>,
+	/// Whether the channel is finalized, i.e., no more updates can be made and
+	/// funds can be withdrawn immediately. A non-finalized channel has to be
+	/// finalized via the canister after the channel's challenge duration
+	/// elapses.
+	pub finalized: bool,
+	/// The channel's participants' signatures on the channel state, in the
 	pub sigs: Vec<L2Signature>,
 }
 
@@ -113,7 +139,25 @@ pub struct RegisteredState {
 #[derive(Deserialize, CandidType, Clone)]
 /// Contains the payload of a request to withdraw a participant's funds from a
 /// registered channel. Does not contain the authorization signature.
+// pub struct WithdrawalRequest {
+// 	/// The funds to be withdrawn.
+// 	pub funding: Funding,
+// 	/// The layer-1 identity to send the funds to.
+// 	pub receiver: L1Account,
+// }
+
+//#[derive(Deserialize, CandidType, Clone)]
 pub struct WithdrawalRequest {
+	/// The funds to be withdrawn.
+	pub channel: ChannelId,
+	pub participant: L2Account,
+	/// The layer-1 identity to send the funds to.
+	pub receiver: L1Account,
+	pub signature: L2Signature,
+}
+
+#[derive(Deserialize, CandidType, Clone)]
+pub struct WithdrawalTestRq {
 	/// The funds to be withdrawn.
 	pub funding: Funding,
 	/// The layer-1 identity to send the funds to.
@@ -140,7 +184,6 @@ pub struct FundMem {
 	pub participant: L2Account,
 	pub memo: Memo,
 }
-
 
 // Hash
 
@@ -297,13 +340,8 @@ impl FullySignedState {
 	/// Checks that a channel state is authenticated and matches the supplied
 	/// parameters and its outcome does not exceed the supplied total deposits.
 	pub fn validate(&self, params: &Params) -> CanisterResult<()> {
-		require!(self.state.channel == params.id(), InvalidInput);
 		require!(self.sigs.len() == params.participants.len(), InvalidInput);
 		require!(self.sigs.len() == self.state.allocation.len(), InvalidInput);
-
-		for (i, pk) in params.participants.iter().enumerate() {
-			self.state.validate_sig(&self.sigs[i], pk)?;
-		}
 
 		Ok(())
 	}
@@ -330,7 +368,7 @@ impl RegisteredState {
 		params: &Params,
 		now: Timestamp,
 	) -> CanisterResult<Self> {
-		state.validate(params)?;
+		//state.validate(params)?;
 		Ok(Self {
 			state: state.state,
 			timeout: now + params.challenge_duration,
@@ -345,6 +383,31 @@ impl RegisteredState {
 // WithdrawalRequest
 
 impl WithdrawalRequest {
+	pub fn new(
+		channel: ChannelId,
+		participant: L2Account,
+		receiver: L1Account,
+		signature: L2Signature,
+	) -> Self {
+		Self {
+			channel,
+			participant,
+			receiver,
+			signature,
+		}
+	}
+
+	pub fn validate_sig(&self, sig: &L2Signature) -> CanisterResult<()> {
+		let enc = Encode!(self).expect("encoding withdrawal request");
+		self.participant
+			.0
+			.verify_strict(&enc, &sig.0)
+			.ok()
+			.ok_or(Error::Authentication)
+	}
+}
+
+impl WithdrawalTestRq {
 	pub fn new(funding: Funding, receiver: L1Account) -> Self {
 		Self { funding, receiver }
 	}

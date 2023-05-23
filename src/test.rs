@@ -138,7 +138,6 @@ impl Setup {
 	/// Returns the funding for a participant.
 	pub fn funding(&self, part: usize) -> Funding {
 		Funding::new(self.params.id(), self.parts[part].clone())
-
 	}
 
 	/// Creates a signed withdrawal request of the setup's channel for a given
@@ -147,20 +146,20 @@ impl Setup {
 		&self,
 		part: usize,
 		receiver: L1Account,
-	) -> (WithdrawalRequest, L2Signature) {
+	) -> (WithdrawalTestRq, L2Signature) {
 		let funding = self.funding(part);
-		let req = WithdrawalRequest::new(funding, receiver);
+		let req = WithdrawalTestRq::new(funding, receiver);
 		(req.clone(), self.sign_withdrawal(&req, part))
 	}
 
 	/// Creates a signed withdrawal request with a preset receiver.
-	pub fn withdrawal(&self, part: usize) -> (WithdrawalRequest, L2Signature) {
+	pub fn withdrawal(&self, part: usize) -> (WithdrawalTestRq, L2Signature) {
 		self.withdrawal_to(part, default_account())
 	}
 
 	/// Manually signs a withdrawal request using the requested participant's
 	/// secret key.
-	pub fn sign_withdrawal(&self, req: &WithdrawalRequest, part: usize) -> L2Signature {
+	pub fn sign_withdrawal(&self, req: &WithdrawalTestRq, part: usize) -> L2Signature {
 		let enc = Encode!(req).unwrap();
 		L2Signature(
 			self.secrets[part]

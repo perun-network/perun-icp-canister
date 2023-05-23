@@ -11,13 +11,14 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
- // ic_types::Principal
+// ic_types::Principal
 use candid::{encode_args, Decode, Encode, Nat};
 //use garcon::Delay;
 //use ring::signature::Ed25519KeyPair;
 //use ring::rand::SystemRandom;
 use ic_agent::{
-	agent::http_transport::ReqwestHttpReplicaV2Transport, Agent, Identity, identity::Secp256k1Identity,
+	agent::http_transport::ReqwestHttpReplicaV2Transport, identity::Secp256k1Identity, Agent,
+	Identity,
 };
 use ic_cdk::export::Principal;
 use ic_ledger_types::{
@@ -34,7 +35,7 @@ struct Demo {
 	pub setup: test::Setup,
 	pub agent: Agent,
 	pub canister: Principal,
-	pub ledger: Principal
+	pub ledger: Principal,
 }
 
 /// Entry point for this example.
@@ -52,7 +53,7 @@ async fn main() {
 async fn walkthrough(cid: Principal, lid: Principal, url: String) -> Result<(), Error> {
 	let mut demo = Demo::new(cid, lid, url, true).await?;
 	let (alice, bob) = (0, 1);
-	
+
 	// Query on-chain balances.
 	demo.query_holdings(alice).await?;
 	demo.query_holdings(bob).await?;
@@ -102,7 +103,7 @@ impl Demo {
 			setup: test::Setup::new(finalized, false),
 			agent,
 			canister,
-			ledger
+			ledger,
 		})
 	}
 
@@ -222,20 +223,20 @@ impl Demo {
 		self.agent
 			.update(&self.canister, "withdraw_mocked")
 			.with_arg(encode_args((&req, &auth)).unwrap())
-			.call_and_wait() //self.delay.clone()
+			.call_and_wait()
 			.await?;
 		Ok(())
 	}
 }
 
-/// First arg can be a ICP chain url, defaults to "http://localhost:8000/".
+/// First arg can be a ICP chain url, defaults to "http://localhost:4943/".
 fn parse_args() -> (Principal, Principal, String) {
 	let cid = env::var("ICP_PERUN_PRINCIPAL").expect("Need canister ID");
 	let lid = env::var("ICP_LEDGER_PRINCIPAL").expect("Need ledger ID");
 	let url = env::args()
 		.skip(2)
 		.next()
-		.unwrap_or("http://localhost:8000/".into());
+		.unwrap_or("http://localhost:4943/".into());
 	info!("URL: {}", url);
 	info!("Canister ID: {}", cid);
 	info!("ICP ledger ID: {}", lid);
@@ -246,13 +247,10 @@ fn parse_args() -> (Principal, Principal, String) {
 	)
 }
 
-
 /// Loads a minter identity from a pem file.
 fn create_identity() -> impl Identity {
-
 	Secp256k1Identity::from_pem_file(
 		std::env::var("HOME").unwrap() + "/.config/dfx/identity/minter/identity.pem",
 	)
 	.expect("loading default identity")
-
 }
