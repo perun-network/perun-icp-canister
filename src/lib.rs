@@ -237,17 +237,17 @@ async fn conclude(conreq: ConcludeRequest) -> String {
 #[update]
 #[candid::candid_method]
 // Withdraws the specified participant's funds from a settled channel.
-async fn withdraw(req: WithdrawalRequest) -> (Option<icp::BlockHeight>, String) {
+async fn withdraw(req: WithdrawalRequest) -> String {
 	let result = withdraw_impl(req).await;
 
 	match result {
-		Ok(block_height) => (Some(block_height), "successful withdrawal".to_string()),
-		Err(_) => (None, "error withdrawing".to_string()),
+		Ok(_block_height) => "successful withdrawal".to_string(),
+		Err(_) => "error withdrawing".to_string(),
 	}
 }
 
 #[update]
-/// Withdraws the specified participant's funds from a settled channel.
+/// Withdraws the specified participant's funds from a settled channel (mocked)
 async fn withdraw_mocked(
 	request: WithdrawalTestRq,
 	auth: L2Signature,
@@ -259,7 +259,6 @@ async fn withdraw_mocked(
 	(result.as_ref().ok().cloned(), result.err())
 }
 async fn withdraw_impl(request: WithdrawalRequest) -> Result<icp::BlockHeight> {
-	//, auth: L2Signature
 	let receiver = request.receiver.clone();
 	let funding = Funding {
 		channel: request.channel.clone(),
