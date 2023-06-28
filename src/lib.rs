@@ -50,7 +50,7 @@ lazy_static! {
 	static ref STATE: RwLock<CanisterState<icp::CanisterTXQuerier>> =
 		RwLock::new(CanisterState::new(
 			icp::CanisterTXQuerier::new(
-				Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parsing principal")
+				Principal::from_text("bkyz2-fmaaa-aaaaa-qaaaq-cai").expect("parsing principal")
 			),
 			ic_cdk::id(),
 		));
@@ -352,6 +352,7 @@ where
 				Event::Funded {
 					who: funding.participant.clone(),
 					total: self.holdings.get(&funding).cloned().unwrap(),
+					timestamp: time, // Added timestamp here
 				},
 			)
 			.await;
@@ -372,6 +373,7 @@ where
 				Event::Funded {
 					who: funding.participant.clone(),
 					total: self.holdings.get(&funding).cloned().unwrap(),
+					timestamp: time, // Added timestamp here
 				},
 			)
 			.await;
@@ -477,7 +479,11 @@ where
 		events::STATE
 			.write()
 			.unwrap()
-			.register_event(now, bare_state.channel.clone(), Event::Concluded)
+			.register_event(
+				now,
+				bare_state.channel.clone(),
+				Event::Concluded { timestamp: now }, // Added timestamp here
+			)
 			.await;
 		Ok(())
 	}
@@ -530,7 +536,14 @@ where
 		match events::STATE.write() {
 			Ok(mut state) => {
 				state
-					.register_event(now, bare_state.channel.clone(), Event::Disputed(regstate))
+					.register_event(
+						now,
+						bare_state.channel.clone(),
+						Event::Disputed {
+							state: regstate,
+							timestamp: now,
+						}, // Added timestamp here
+					)
 					.await
 			}
 			Err(_) => return Err(Error::InvalidInput),

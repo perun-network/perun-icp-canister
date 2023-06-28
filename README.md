@@ -62,7 +62,7 @@ dfx start --clean
 dfx deploy # In a new terminal
 ```
 
-2. Copy the *principal ID* from the terminal which looks like this: `rrkah-fqaaa-aaaaa-aaaaq-cai`.
+2. Copy the *principal ID* from the terminal which looks like this: `bkyz2-fmaaa-aaaaa-qaaaq-cai`.
 Make sure to copy the *Perun* canister ID, **not** the UI canister ID.
 
 3. [Issue #4881 of cargo] needs to be worked around here since the example
@@ -71,12 +71,12 @@ Change the `"cdylib"` in the [Cargo.toml] to `"lib"`.
 
 4. Run the command below with the *Perun* canister ID that you copied:
 ```sh
-RUST_LOG=info cargo run --example happy_walkthrough "rrkah-fqaaa-aaaaa-aaaaq-cai"
+RUST_LOG=info cargo run --example happy_walkthrough "bkyz2-fmaaa-aaaaa-qaaaq-cai"
 ```
 The output should look like this minus the comments:
 ```sh
 INFO  happy_walkthrough > URL: http://localhost:8000/
-INFO  happy_walkthrough > Canister ID: rrkah-fqaaa-aaaaa-aaaaq-cai
+INFO  happy_walkthrough > Canister ID: bkyz2-fmaaa-aaaaa-qaaaq-cai
 # Bob and Alice start with 0 ICP in the channel.
 INFO  happy_walkthrough > Querying deposit channel: 0x920c7366… for peer IDx: 0, now: 0 ICP
 INFO  happy_walkthrough > Querying deposit channel: 0x920c7366… for peer IDx: 1, now: 0 ICP

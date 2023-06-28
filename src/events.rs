@@ -12,14 +12,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use crate::types::*;
 use async_trait::async_trait;
 use ic_cdk::export::Principal;
 use lazy_static::lazy_static;
 use std::collections::BTreeMap;
+use std::fmt;
 use std::sync::RwLock;
-
-use crate::types::*;
-
 lazy_static! {
 	pub static ref STATE: RwLock<LocalEventRegisterer> = RwLock::new(LocalEventRegisterer::new());
 }
@@ -30,26 +29,58 @@ async fn register_event(ch: ChannelId, time: Timestamp, e: Event) {
 	STATE.write().unwrap().register_event(time, ch, e).await;
 }
 
+#[ic_cdk_macros::update]
+#[candid::candid_method]
+//async fn register_event_isolated(ch: ChannelId, time: Timestamp, e: Event) {
+async fn register_event_isolated(regev: RegEvent) {
+	// test event handling using this method
+	let time = regev.time;
+	let ch = regev.chanid;
+	let e = regev.event;
+	STATE.write().unwrap().register_event(time, ch, e).await;
+}
+
 // #[ic_cdk_macros::query]
 // #[candid::candid_method(query)]
 // fn query_events(ch: ChannelId, start: Timestamp) -> Vec<Event> {
 // 	STATE.read().unwrap().events_after(&ch, start)
 // }
 
+// #[ic_cdk_macros::query]
+// #[candid::candid_method(query)]
+// fn query_events(et: ChannelTime) -> Vec<Event> {
+// 	STATE.read().unwrap().events_after(&et.chanid, et.time)
+// }
 #[ic_cdk_macros::query]
 #[candid::candid_method(query)]
-fn query_events(et: ChannelTime) -> Vec<Event> {
-	STATE.read().unwrap().events_after(&et.chanid, et.time)
+fn query_events(et: ChannelTime) -> String {
+	STATE.read().unwrap().events_after_str(&et.chanid, et.time)
 }
 
 #[derive(Clone, CandidType, Deserialize)]
+// pub enum Event {
+// 	/// A participant supplied funds into the channel.
+// 	Funded { who: L2Account, total: Amount },
+// 	/// A dispute was started or refuted, along with the latest channel.
+// 	Disputed(RegisteredState),
+// 	/// Channel is now concluded and all funds can be withdrawn, no further updates are possible.
+// 	Concluded,
+// }
+
 pub enum Event {
 	/// A participant supplied funds into the channel.
-	Funded { who: L2Account, total: Amount },
+	Funded {
+		who: L2Account,
+		total: Amount,
+		timestamp: Timestamp,
+	},
 	/// A dispute was started or refuted, along with the latest channel.
-	Disputed(RegisteredState),
+	Disputed {
+		state: RegisteredState,
+		timestamp: Timestamp,
+	},
 	/// Channel is now concluded and all funds can be withdrawn, no further updates are possible.
-	Concluded,
+	Concluded { timestamp: Timestamp },
 }
 
 #[derive(PartialEq, Clone, Deserialize, Eq, Hash, CandidType)]
@@ -59,6 +90,17 @@ pub struct ChannelTime {
 	chanid: ChannelId,
 	/// The time after which to return events.
 	time: Timestamp,
+}
+
+#[derive(Clone, Deserialize, CandidType)]
+
+pub struct RegEvent {
+	/// The channel id.
+	chanid: ChannelId,
+	/// The time after which to return events.
+	time: Timestamp,
+	/// The event to register.
+	event: Event,
 }
 
 #[async_trait]
@@ -99,6 +141,47 @@ impl EventRegisterer for LocalEventRegisterer {
 	}
 }
 
+impl fmt::Display for State {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(
+			f,
+			"Channel: {} Version: {} Allocation: {:?} Finalized: {}",
+			self.channel, self.version, self.allocation, self.finalized
+		)
+	}
+}
+
+impl fmt::Display for L2Account {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		// Use Debug implementation of PublicKey
+		write!(f, "{:?}", self.0)
+	}
+}
+
+impl fmt::Display for Event {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Event::Funded {
+				who,
+				total,
+				timestamp,
+			} => {
+				write!(
+					f,
+					"Funded event: who={}, total={}, timestamp={}",
+					who, total, timestamp
+				)
+			}
+			Event::Disputed { state, timestamp } => write!(
+				f,
+				"Disputed event: state={}, timeout={}, timestamp={}",
+				state.state, state.timeout, timestamp
+			),
+			Event::Concluded { timestamp } => write!(f, "Concluded event, timestamp={}", timestamp),
+		}
+	}
+}
+
 #[async_trait]
 impl EventRegisterer for CanisterState {
 	async fn register_event(&mut self, time: Timestamp, ch: ChannelId, e: Event) {
@@ -118,6 +201,20 @@ impl LocalEventRegisterer {
 			}
 			ret
 		})
+	}
+
+	pub fn events_after_str(&self, ch: &ChannelId, time: Timestamp) -> String {
+		self.events
+			.get(ch)
+			.map_or(String::from("No events"), |events| {
+				let mut ret = String::new();
+				for (_, es) in events.range(time..) {
+					for e in es {
+						ret.push_str(&format!("{}\n", e));
+					}
+				}
+				ret
+			})
 	}
 
 	pub fn gc(&mut self, min_time: Timestamp) {

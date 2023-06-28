@@ -29,10 +29,10 @@ echo "Deploying ledger and icp_perun"
 dfx deploy ledger --argument '(record {minting_account = "'${ICP_PERUN_MINT_ACC}'"; initial_values = vec { record { "'${ICP_PERUN_DEFAULT_ACC}'"; record { e8s=0 } }; }; send_whitelist = vec {}})'
 echo "Deployed ledger"
 
-export ICP_LEDGER_PRINCIPAL="rrkah-fqaaa-aaaaa-aaaaq-cai"
+export ICP_LEDGER_PRINCIPAL="bkyz2-fmaaa-aaaaa-qaaaq-cai"
 #`dfx canister id ledger`
 dfx deploy icp_perun
-export ICP_PERUN_PRINCIPAL="r7inp-6aaaa-aaaaa-aaabq-cai"
+export ICP_PERUN_PRINCIPAL="be2us-64aaa-aaaaa-qaabq-cai"
 #`dfx canister id icp_perun`
 
 sed -i "s/cdylib/lib/g" Cargo.toml

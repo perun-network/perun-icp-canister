@@ -37,7 +37,7 @@ pub struct Setup {
 
 /// Returns a default L1 account value.
 pub fn default_account() -> L1Account {
-	L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap()
+	L1Account::from_text("bkyz2-fmaaa-aaaaa-qaaaq-cai").unwrap()
 }
 
 pub fn rand_hash(rng: &mut Prng) -> Hash {
