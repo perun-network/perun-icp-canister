@@ -25,7 +25,6 @@ pub use ic_cdk::export::candid::{
 	types::{Serializer, Type},
 	CandidType, Deserialize, Int, Nat,
 };
-use ic_ledger_types::Memo;
 use serde::de::{Deserializer, Error as _};
 use serde_bytes::ByteBuf;
 
@@ -52,9 +51,15 @@ pub type Duration = u64;
 /// Timestamp in nanoseconds (same as ICP timestamps).
 pub type Timestamp = u64;
 /// Unique Perun channel identifier.
-pub type ChannelId = Hash;
+//pub type ChannelId = Hash;
+#[derive(PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub struct ChannelId(pub [u8; 32]);
 /// A channel's unique nonce.
-pub type Nonce = Hash;
+//pub type Nonce = Hash;
+#[derive(PartialEq, Eq, Hash, Ord, PartialOrd)]
+
+pub struct Nonce(pub [u8; 32]);
+
 /// Channel state version identifier.
 pub type Version = u64;
 
@@ -84,6 +89,7 @@ pub struct State {
 	/// finalized via the canister after the channel's challenge duration
 	/// elapses.
 	pub finalized: bool,
+	// shows the phase the channel is in
 }
 
 #[derive(Deserialize, CandidType, Default, Clone)]
@@ -154,6 +160,7 @@ pub struct WithdrawalRequest {
 	/// The layer-1 identity to send the funds to.
 	pub receiver: L1Account,
 	pub signature: L2Signature,
+	pub time: Timestamp,
 }
 
 #[derive(Deserialize, CandidType, Clone)]
@@ -174,17 +181,6 @@ pub struct Funding {
 	pub participant: L2Account,
 }
 
-#[derive(PartialEq, Clone, Deserialize, Eq, Hash, CandidType)]
-/// Identifies the funds belonging to a certain layer 2 identity within a
-/// certain channel.
-pub struct FundMem {
-	/// The channel's unique identifier.
-	pub channel: ChannelId,
-	/// The funds' owner's layer-2 identity within the channel.
-	pub participant: L2Account,
-	pub memo: Memo,
-}
-
 // Hash
 
 impl<'de> Deserialize<'de> for Hash {
@@ -200,6 +196,38 @@ impl<'de> Deserialize<'de> for Hash {
 		Ok(Hash(*digest::Output::<Hasher>::from_slice(
 			bytes.as_slice(),
 		)))
+	}
+}
+
+impl<'de> Deserialize<'de> for ChannelId {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let bytes = Vec::<u8>::deserialize(deserializer)?;
+		require!(
+			bytes.len() == 32,
+			D::Error::invalid_length(bytes.len(), &"32-byte ChannelId")
+		);
+		let mut arr = [0u8; 32];
+		arr.copy_from_slice(&bytes[..32]);
+		Ok(ChannelId(arr))
+	}
+}
+
+impl<'de> Deserialize<'de> for Nonce {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let bytes = Vec::<u8>::deserialize(deserializer)?;
+		require!(
+			bytes.len() == 32,
+			D::Error::invalid_length(bytes.len(), &"32-byte Nonce")
+		);
+		let mut arr = [0u8; 32];
+		arr.copy_from_slice(&bytes[..32]);
+		Ok(Nonce(arr))
 	}
 }
 
@@ -268,6 +296,56 @@ impl CandidType for L2Account {
 	}
 }
 
+impl CandidType for ChannelId {
+	fn _ty() -> Type {
+		Type::Vec(Box::new(Type::Nat8))
+	}
+
+	fn idl_serialize<S>(&self, serializer: S) -> core::result::Result<(), S::Error>
+	where
+		S: Serializer,
+	{
+		serializer.serialize_blob(&self.0)
+	}
+}
+
+impl CandidType for Nonce {
+	fn _ty() -> Type {
+		Type::Vec(Box::new(Type::Nat8))
+	}
+
+	fn idl_serialize<S>(&self, serializer: S) -> core::result::Result<(), S::Error>
+	where
+		S: Serializer,
+	{
+		serializer.serialize_blob(&self.0)
+	}
+}
+
+impl Default for ChannelId {
+	fn default() -> Self {
+		ChannelId([0; 32])
+	}
+}
+
+impl Default for Nonce {
+	fn default() -> Self {
+		Nonce([0; 32])
+	}
+}
+
+impl Clone for ChannelId {
+	fn clone(&self) -> Self {
+		ChannelId(self.0.clone())
+	}
+}
+
+impl Clone for Nonce {
+	fn clone(&self) -> Self {
+		Nonce(self.0.clone())
+	}
+}
+
 impl std::hash::Hash for L2Account {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		self.0.to_bytes().hash(state);
@@ -305,8 +383,22 @@ impl CandidType for L2Signature {
 
 impl State {
 	pub fn validate_sig(&self, sig: &L2Signature, pk: &L2Account) -> CanisterResult<()> {
-		let enc = Encode!(self).expect("encoding state");
-		pk.0.verify_strict(&enc, &sig.0)
+		let mut msg_enc = Vec::new();
+
+		msg_enc.extend_from_slice(&self.channel.0); // add channel id bytes
+		let version_bytes = self.version.to_le_bytes(); // convert version to bytes
+		msg_enc.extend_from_slice(&version_bytes); // add version bytes
+
+		//Add allocation bytes
+		for amount in &self.allocation {
+			let amount_bytes = (amount.0).to_bytes_le(); // convert amount to bytes
+			msg_enc.extend_from_slice(&amount_bytes); // add amount bytes
+		}
+
+		let finalized_bytes = [self.finalized as u8]; // convert boolean to byte
+		msg_enc.extend_from_slice(&finalized_bytes); // add finalized byte
+
+		pk.0.verify_strict(&msg_enc, &sig.0)
 			.ok()
 			.ok_or(Error::Authentication)
 	}
@@ -330,7 +422,20 @@ impl State {
 
 impl Params {
 	pub fn id(&self) -> ChannelId {
-		Hash::digest(&Encode!(self).unwrap())
+		let mut params_bytes = Vec::new();
+		params_bytes.extend_from_slice(&self.nonce.0);
+
+		for participant in &self.participants {
+			params_bytes.extend_from_slice(&participant.0.to_bytes());
+		}
+
+		let challenge_duration_bytes = self.challenge_duration.to_le_bytes();
+		params_bytes.extend_from_slice(&challenge_duration_bytes);
+
+		let hash = Hash::digest(&params_bytes);
+		let mut arr = [0u8; 32];
+		arr.copy_from_slice(&hash.0[..32]); // Take only first 32 bytes
+		ChannelId(arr)
 	}
 }
 
@@ -340,8 +445,13 @@ impl FullySignedState {
 	/// Checks that a channel state is authenticated and matches the supplied
 	/// parameters and its outcome does not exceed the supplied total deposits.
 	pub fn validate(&self, params: &Params) -> CanisterResult<()> {
+		require!(self.state.channel == params.id(), InvalidInput);
 		require!(self.sigs.len() == params.participants.len(), InvalidInput);
 		require!(self.sigs.len() == self.state.allocation.len(), InvalidInput);
+
+		for (i, pk) in params.participants.iter().enumerate() {
+			self.state.validate_sig(&self.sigs[i], pk)?;
+		}
 
 		Ok(())
 	}
@@ -368,7 +478,7 @@ impl RegisteredState {
 		params: &Params,
 		now: Timestamp,
 	) -> CanisterResult<Self> {
-		//state.validate(params)?;
+		state.validate(params)?;
 		Ok(Self {
 			state: state.state,
 			timeout: now + params.challenge_duration,
@@ -388,20 +498,27 @@ impl WithdrawalRequest {
 		participant: L2Account,
 		receiver: L1Account,
 		signature: L2Signature,
+		time: Timestamp,
 	) -> Self {
 		Self {
 			channel,
 			participant,
 			receiver,
 			signature,
+			time,
 		}
 	}
 
 	pub fn validate_sig(&self, sig: &L2Signature) -> CanisterResult<()> {
-		let enc = Encode!(self).expect("encoding withdrawal request");
+		let mut msg_enc = Vec::new();
+
+		msg_enc.extend_from_slice(&self.channel.0);
+		msg_enc.extend_from_slice(&self.participant.0.to_bytes());
+		msg_enc.extend_from_slice(&self.receiver.as_slice());
+
 		self.participant
 			.0
-			.verify_strict(&enc, &sig.0)
+			.verify_strict(&msg_enc, &sig.0)
 			.ok()
 			.ok_or(Error::Authentication)
 	}
@@ -434,7 +551,11 @@ impl Funding {
 	}
 
 	pub fn memo(&self) -> u64 {
-		let h = Hash::digest(&Encode!(self).unwrap());
+		let mut data = Vec::new();
+		data.extend_from_slice(&self.channel.0);
+		data.extend_from_slice(&self.participant.0.to_bytes());
+
+		let h = Hash::digest(&data);
 		let arr: [u8; 8] = [
 			h.0[0], h.0[1], h.0[2], h.0[3], h.0[4], h.0[5], h.0[6], h.0[7],
 		];

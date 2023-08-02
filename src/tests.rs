@@ -301,11 +301,13 @@ fn test_withdraw_invalid_sig() {
 /// Tests that the channel to be withdrawn from must be known.
 fn test_withdraw_unknown_channel() {
 	let mut s = test::Setup::new(true, true);
-	let unknown_id = test::rand_hash(&mut s.prng);
+	//let unknown_id = test::rand_hash(&mut s.prng);
 	let sstate = s.sign_state();
 	assert_ok!(s.canister.conclude_can(s.params.clone(), sstate, 0));
 
 	let (mut req, _) = s.withdrawal(0);
+	let unknown_hash = test::rand_hash(&mut s.prng);
+	let unknown_id = hash_to_channel_id(&unknown_hash);
 	req.funding.channel = unknown_id;
 
 	let sig = s.sign_withdrawal(&req, 0);

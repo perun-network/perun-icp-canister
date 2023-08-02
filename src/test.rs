@@ -89,8 +89,12 @@ impl Setup {
 		let parts = vec![key0.1, key1.1];
 		let secrets = vec![key0.0, key1.0];
 
+		let hash = rand_hash(&mut rand);
+		let mut nonce_bytes = [0u8; 32];
+		nonce_bytes.copy_from_slice(hash.0.as_slice());
+
 		let params = Params {
-			nonce: rand_hash(&mut rand),
+			nonce: Nonce(nonce_bytes),
 			participants: parts.clone(),
 			challenge_duration: 1,
 		};

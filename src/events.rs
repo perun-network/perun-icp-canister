@@ -58,14 +58,6 @@ fn query_events(et: ChannelTime) -> String {
 }
 
 #[derive(Clone, CandidType, Deserialize)]
-// pub enum Event {
-// 	/// A participant supplied funds into the channel.
-// 	Funded { who: L2Account, total: Amount },
-// 	/// A dispute was started or refuted, along with the latest channel.
-// 	Disputed(RegisteredState),
-// 	/// Channel is now concluded and all funds can be withdrawn, no further updates are possible.
-// 	Concluded,
-// }
 
 pub enum Event {
 	/// A participant supplied funds into the channel.
@@ -80,7 +72,10 @@ pub enum Event {
 		timestamp: Timestamp,
 	},
 	/// Channel is now concluded and all funds can be withdrawn, no further updates are possible.
-	Concluded { timestamp: Timestamp },
+	Concluded {
+		state: RegisteredState,
+		timestamp: Timestamp,
+	},
 }
 
 #[derive(PartialEq, Clone, Deserialize, Eq, Hash, CandidType)]
@@ -158,6 +153,15 @@ impl fmt::Display for L2Account {
 	}
 }
 
+impl fmt::Display for ChannelId {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		for byte in &self.0 {
+			write!(f, "{:02x}", byte)?;
+		}
+		Ok(())
+	}
+}
+
 impl fmt::Display for Event {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
@@ -168,16 +172,40 @@ impl fmt::Display for Event {
 			} => {
 				write!(
 					f,
-					"Funded event: who={}, total={}, timestamp={}",
+					"Funded event: Funded_who={}, Funded_total=TotalStart{}TotalEnd, Funded_timestamp=TimestampStart{}TimestampEnd",
 					who, total, timestamp
 				)
 			}
-			Event::Disputed { state, timestamp } => write!(
-				f,
-				"Disputed event: state={}, timeout={}, timestamp={}",
-				state.state, state.timeout, timestamp
-			),
-			Event::Concluded { timestamp } => write!(f, "Concluded event, timestamp={}", timestamp),
+			Event::Disputed { state, timestamp } => {
+				let alloc_string = state
+					.state
+					.allocation
+					.iter()
+					.map(|nat| format!("{}", nat))
+					.collect::<Vec<String>>()
+					.join(", ");
+
+				write!(
+					f,
+					"Disputed event: Dispute_state=ChannelIDStart{}ChannelIDEnd, Dispute_state=VersionStart{}VersionEnd, Dispute_timeout=FinalizedStart{}FinalizedEnd, Dispute_alloc=AllocStart{}AllocEnd, Dispute_timeout=TimeoutStart{}TimeoutEnd, Dispute_timestamp=TimestampStart{}TimestampEnd",
+					state.state.channel, state.state.version, state.state.finalized, alloc_string, state.timeout, timestamp
+				)
+			}
+
+			Event::Concluded { state, timestamp } => {
+				let alloc_string = state
+					.state
+					.allocation
+					.iter()
+					.map(|nat| format!("{}", nat))
+					.collect::<Vec<String>>()
+					.join(", ");
+				write!(
+					f,
+					"Concluded event: Conclude_state=ChannelIDStart{}ChannelIDEnd, Conclude_state=VersionStart{}VersionEnd, Conclude_timeout=FinalizedStart{}FinalizedEnd, Conclude_alloc=AllocStart{}AllocEnd, Conclude_timeout=TimeoutStart{}TimeoutEnd, Conclude_timestamp=TimestampStart{}TimestampEnd",
+					state.state.channel, state.state.version, state.state.finalized, alloc_string, state.timeout, timestamp
+				)
+			}
 		}
 	}
 }

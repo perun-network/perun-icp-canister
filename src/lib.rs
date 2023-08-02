@@ -75,15 +75,6 @@ async fn transaction_notification(block_height: u64) -> Result<Amount> {
 }
 
 #[query]
-#[candid_method(query)]
-/// Returns the funding and memo specific for a channel's participant.
-/// this function should be used to check whether all participants have
-/// deposited their owed funds into a channel to ensure it is fully funded.
-fn query_funding_memo(fundmem: FundMem) -> Option<FundMem> {
-	Some(fundmem)
-}
-
-#[query]
 #[candid::candid_method(query)]
 
 /// Returns the funding specific for a channel's participant.
@@ -114,19 +105,6 @@ fn query_holdings(funding: Funding) -> Option<Amount> {
 #[update]
 #[candid_method]
 
-async fn deposit_memo(fundmem: FundMem) -> Option<String> {
-	match STATE
-		.write()
-		.unwrap()
-		.deposit_icp_memo(blocktime(), fundmem)
-		.await
-	{
-		Ok(_) => Some("Success".to_string()),
-		Err(e) => Some(format!("{}", e)),
-	}
-}
-
-#[update]
 async fn deposit(funding: Funding) -> Option<Error> {
 	STATE
 		.write()
@@ -248,14 +226,8 @@ async fn withdraw(req: WithdrawalRequest) -> String {
 
 #[update]
 /// Withdraws the specified participant's funds from a settled channel (mocked)
-async fn withdraw_mocked(
-	request: WithdrawalTestRq,
-	auth: L2Signature,
-) -> (Option<Amount>, Option<Error>) {
-	let result = STATE
-		.write()
-		.unwrap()
-		.withdraw_can(request, auth, blocktime()); // auth
+async fn withdraw_mocked(request: WithdrawalRequest) -> (Option<Amount>, Option<Error>) {
+	let result = STATE.write().unwrap().withdraw(request); // auth
 	(result.as_ref().ok().cloned(), result.err())
 }
 async fn withdraw_impl(request: WithdrawalRequest) -> Result<icp::BlockHeight> {
@@ -266,7 +238,9 @@ async fn withdraw_impl(request: WithdrawalRequest) -> Result<icp::BlockHeight> {
 	};
 
 	let amount = STATE.write().unwrap().withdraw(request)?;
+
 	let mut amount_str = amount.to_string();
+
 	amount_str.retain(|c| c != '_');
 	let amount_u64 = amount_str.parse::<u64>().unwrap();
 
@@ -303,15 +277,6 @@ async fn withdraw_impl(request: WithdrawalRequest) -> Result<icp::BlockHeight> {
 
 #[ic_cdk_macros::query]
 #[candid::candid_method(query)]
-/// Returns the memo specific for a channel's participant.
-/// this function should be used to check whether all participants have
-/// deposited their owed funds into a channel to ensure it is fully funded.
-fn query_fid(funding: Funding) -> Option<Memo> {
-	STATE.read().unwrap().show_fid(funding)
-}
-
-#[ic_cdk_macros::query]
-#[candid::candid_method(query)]
 /// Returns the latest registered state for a given channel and its dispute
 /// timeout. This function should be used to check for registered disputes.
 fn query_state(id: ChannelId) -> Option<RegisteredState> {
@@ -334,31 +299,6 @@ where
 		Ok(())
 	}
 
-	/// Call this to access funds deposited and previously registered - memo is in the input already
-	pub async fn deposit_icp_memo(&mut self, time: Timestamp, fundmem: FundMem) -> Result<()> {
-		let funding = Funding {
-			channel: fundmem.channel.clone(),
-			participant: fundmem.participant.clone(),
-		};
-		let amount = self.icp_receiver.drain(fundmem.memo.0);
-
-		self.deposit(funding.clone(), amount)?;
-		events::STATE
-			.write()
-			.unwrap()
-			.register_event(
-				time,
-				funding.channel.clone(),
-				Event::Funded {
-					who: funding.participant.clone(),
-					total: self.holdings.get(&funding).cloned().unwrap(),
-					timestamp: time, // Added timestamp here
-				},
-			)
-			.await;
-		Ok(())
-	}
-
 	/// Call this to access funds deposited and previously registered.
 	pub async fn deposit_icp(&mut self, time: Timestamp, funding: Funding) -> Result<()> {
 		let memo = funding.memo();
@@ -373,7 +313,7 @@ where
 				Event::Funded {
 					who: funding.participant.clone(),
 					total: self.holdings.get(&funding).cloned().unwrap(),
-					timestamp: time, // Added timestamp here
+					timestamp: time,
 				},
 			)
 			.await;
@@ -391,11 +331,6 @@ where
 
 	pub fn query_holdings(&self, funding: Funding) -> Option<Amount> {
 		self.holdings.get(&funding).cloned()
-	}
-
-	pub fn show_fid(&self, funding: Funding) -> Option<Memo> {
-		let mem: u64 = funding.memo();
-		Some(ic_ledger_types::Memo(mem))
 	}
 
 	/// Queries a registered state.
@@ -463,17 +398,15 @@ where
 			require!(!old_state.settled(now), AlreadyConcluded);
 		}
 
-		// Unwrap the Result from register_channel
 		self.register_channel(
 			&params,
-			RegisteredState::conclude(fsstate.clone(), &params)?, // propagate error
+			RegisteredState::conclude(fsstate.clone(), &params)?,
 		)?;
 
-		let bare_state = State {
-			channel: fsstate.state.channel.clone(),
-			version: fsstate.state.version.clone(),
-			allocation: fsstate.state.allocation.clone(),
-			finalized: fsstate.state.finalized.clone(),
+		let state = fsstate.state.clone();
+		let regstate = RegisteredState {
+			state: state.clone(),
+			timeout: now,
 		};
 
 		events::STATE
@@ -481,8 +414,11 @@ where
 			.unwrap()
 			.register_event(
 				now,
-				bare_state.channel.clone(),
-				Event::Concluded { timestamp: now }, // Added timestamp here
+				state.channel.clone(),
+				Event::Concluded {
+					state: regstate,
+					timestamp: now,
+				},
 			)
 			.await;
 		Ok(())
@@ -542,7 +478,7 @@ where
 						Event::Disputed {
 							state: regstate,
 							timestamp: now,
-						}, // Added timestamp here
+						},
 					)
 					.await
 			}
@@ -553,11 +489,14 @@ where
 	}
 
 	pub fn withdraw(&mut self, req: WithdrawalRequest) -> Result<Amount> {
+		let auth = req.signature.clone();
+		let now = req.time.clone();
+		req.validate_sig(&auth)?;
 		let funding = Funding::new(req.channel.clone(), req.participant.clone());
 		match self.state(&req.channel) {
 			None => Err(Error::NotFinalized),
-			Some(_state) => {
-				//require!(state.settled(now), NotFinalized);
+			Some(state) => {
+				require!(state.settled(now), NotFinalized);
 				Ok(self.holdings.remove(&funding).unwrap_or_default())
 			}
 		}
@@ -578,4 +517,10 @@ where
 			}
 		}
 	}
+}
+
+pub fn hash_to_channel_id(hash: &Hash) -> ChannelId {
+	let mut arr = [0u8; 32];
+	arr.copy_from_slice(&hash.0[..32]);
+	ChannelId(arr)
 }
