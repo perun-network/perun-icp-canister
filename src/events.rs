@@ -148,7 +148,6 @@ impl fmt::Display for State {
 
 impl fmt::Display for L2Account {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		// Use Debug implementation of PublicKey
 		write!(f, "{:?}", self.0)
 	}
 }

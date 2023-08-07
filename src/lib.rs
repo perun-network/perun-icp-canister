@@ -70,7 +70,7 @@ pub struct CanisterState<Q: icp::TXQuerier> {
 #[ic_cdk_macros::update]
 #[candid::candid_method]
 /// The user needs to call this with his transaction.
-async fn transaction_notification(block_height: u64) -> Result<Amount> {
+async fn transaction_notification(block_height: u64) -> Option<Amount> {
 	STATE.write().unwrap().process_icp_tx(block_height).await
 }
 
@@ -322,10 +322,10 @@ where
 
 	/// Call this to process an ICP transaction and register the funds for
 	/// further use.
-	pub async fn process_icp_tx(&mut self, tx: icp::BlockHeight) -> Result<Amount> {
+	pub async fn process_icp_tx(&mut self, tx: icp::BlockHeight) -> Option<Amount> {
 		match self.icp_receiver.verify(tx).await {
-			Ok(v) => Ok(v),
-			Err(e) => Err(Error::ReceiverError(e)),
+			Ok(v) => Some(v),
+			Err(_e) => None, //Err(Error::ReceiverError(e)),
 		}
 	}
 
@@ -466,7 +466,7 @@ where
 
 		let regstate = RegisteredState {
 			state: bare_state.clone(),
-			timeout: now,
+			timeout: now + to_nanoseconds(params.challenge_duration), //params.challenge_duration * 1_000_000_000,
 		};
 
 		match events::STATE.write() {

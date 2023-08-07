@@ -481,7 +481,7 @@ impl RegisteredState {
 		state.validate(params)?;
 		Ok(Self {
 			state: state.state,
-			timeout: now + params.challenge_duration,
+			timeout: now + to_nanoseconds(params.challenge_duration), // * 1_000_000_000,
 		})
 	}
 
@@ -561,4 +561,8 @@ impl Funding {
 		];
 		u64::from_le_bytes(arr)
 	}
+}
+
+pub fn to_nanoseconds(seconds: u64) -> u64 {
+	seconds * 1_000_000_000
 }
