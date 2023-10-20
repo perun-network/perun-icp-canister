@@ -12,7 +12,7 @@ description = "Dfinity ICP Canister for Perun Payment Channels"
 
 [lib]
 # https://github.com/rust-lang/cargo/issues/4881
-crate-type = ["lib"]
+crate-type = ["cdylib"]
 name = "icp_perun"
 
 [dependencies]
