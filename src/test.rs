@@ -16,6 +16,7 @@ use candid::Encode;
 use ed25519_dalek::{ExpandedSecretKey, SecretKey};
 use ic_cdk::export::Principal;
 use oorandom::Rand64 as Prng;
+
 use std::time::SystemTime;
 
 use crate::{types::*, CanisterState};
@@ -37,7 +38,7 @@ pub struct Setup {
 
 /// Returns a default L1 account value.
 pub fn default_account() -> L1Account {
-	L1Account::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap()
+	L1Account::from_text("bkyz2-fmaaa-aaaaa-qaaaq-cai").unwrap()
 }
 
 pub fn rand_hash(rng: &mut Prng) -> Hash {
@@ -85,11 +86,16 @@ impl Setup {
 	pub fn with_rng(mut rand: Prng, finalized: bool, funded: bool) -> Self {
 		let key0 = rand_key(&mut rand);
 		let key1 = rand_key(&mut rand);
+
 		let parts = vec![key0.1, key1.1];
 		let secrets = vec![key0.0, key1.0];
 
+		let hash = rand_hash(&mut rand);
+		let mut nonce_bytes = [0u8; 32];
+		nonce_bytes.copy_from_slice(&hash.0[32..]);
+
 		let params = Params {
-			nonce: rand_hash(&mut rand),
+			nonce: Nonce(nonce_bytes),
 			participants: parts.clone(),
 			challenge_duration: 1,
 		};
@@ -98,8 +104,8 @@ impl Setup {
 			channel: params.id(),
 			version: rand.rand_u64(),
 			allocation: vec![
-				(rand.rand_u64() >> 20).into(),
-				(rand.rand_u64() >> 20).into(),
+				(rand.rand_u64() % 10001).into(),
+				(rand.rand_u64() % 10001).into(),
 			],
 			finalized,
 		};
@@ -127,8 +133,22 @@ impl Setup {
 
 	/// Signs the setup's channel state for all channel participants.
 	pub fn sign_state(&self) -> FullySignedState {
-		self.sign_encoding(&Encode!(&self.state).unwrap())
+		let mut state_enc = Vec::new();
+		state_enc.extend_from_slice(&self.state.channel.0);
+		let version_bytes = self.state.version.to_le_bytes();
+		state_enc.extend_from_slice(&version_bytes);
+
+		for amount in &self.state.allocation {
+			let amount_bytes = (amount.0).to_bytes_le(); // convert amount to bytes
+			state_enc.extend_from_slice(&amount_bytes); // add amount bytes
+		}
+
+		let finalized_bytes = [self.state.finalized as u8]; // convert boolean to byte
+		state_enc.extend_from_slice(&finalized_bytes); // add finalized byte
+
+		self.sign_encoding(&state_enc)
 	}
+
 	/// Creates a fully signed state with invalid signatures.
 	pub fn sign_state_invalid(&self) -> FullySignedState {
 		self.sign_encoding(&Encode!(&"invalid state").unwrap())
@@ -145,20 +165,20 @@ impl Setup {
 		&self,
 		part: usize,
 		receiver: L1Account,
-	) -> (WithdrawalRequest, L2Signature) {
+	) -> (WithdrawalTestRq, L2Signature) {
 		let funding = self.funding(part);
-		let req = WithdrawalRequest::new(funding, receiver);
+		let req = WithdrawalTestRq::new(funding, receiver);
 		(req.clone(), self.sign_withdrawal(&req, part))
 	}
 
 	/// Creates a signed withdrawal request with a preset receiver.
-	pub fn withdrawal(&self, part: usize) -> (WithdrawalRequest, L2Signature) {
+	pub fn withdrawal(&self, part: usize) -> (WithdrawalTestRq, L2Signature) {
 		self.withdrawal_to(part, default_account())
 	}
 
 	/// Manually signs a withdrawal request using the requested participant's
 	/// secret key.
-	pub fn sign_withdrawal(&self, req: &WithdrawalRequest, part: usize) -> L2Signature {
+	pub fn sign_withdrawal(&self, req: &WithdrawalTestRq, part: usize) -> L2Signature {
 		let enc = Encode!(req).unwrap();
 		L2Signature(
 			self.secrets[part]

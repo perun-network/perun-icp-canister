@@ -22,7 +22,7 @@ use ic_ledger_types::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-pub const MAINNET_ICP_LEDGER: &str = "ryjl3-tyaaa-aaaaa-aaaba-cai";
+pub const MAINNET_ICP_LEDGER: &str = "bkyz2-fmaaa-aaaaa-qaaaq-cai";
 
 pub type Memo = u64;
 pub type BlockHeight = u64;

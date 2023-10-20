@@ -24,6 +24,8 @@ pub mod test;
 #[cfg(test)]
 mod tests;
 
+use error::*;
+use events::*;
 use ic_cdk::api::time as blocktime;
 use ic_cdk::export::Principal;
 use ic_ledger_types::{
@@ -32,16 +34,23 @@ use ic_ledger_types::{
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::sync::RwLock;
-
-use error::*;
-use events::*;
 use types::*;
+
+use candid::export_service;
+use ic_cdk::export::candid::candid_method;
+use ic_cdk_macros::{query, update};
+
+#[query(name = "__get_candid_interface_tmp_hack")]
+fn export_candid() -> String {
+	export_service!();
+	__export_service()
+}
 
 lazy_static! {
 	static ref STATE: RwLock<CanisterState<icp::CanisterTXQuerier>> =
 		RwLock::new(CanisterState::new(
 			icp::CanisterTXQuerier::new(
-				Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("parsing principal")
+				Principal::from_text("bkyz2-fmaaa-aaaaa-qaaaq-cai").expect("parsing principal")
 			),
 			ic_cdk::id(),
 		));
@@ -59,12 +68,43 @@ pub struct CanisterState<Q: icp::TXQuerier> {
 }
 
 #[ic_cdk_macros::update]
+#[candid::candid_method]
 /// The user needs to call this with his transaction.
-async fn transaction_notification(block_height: u64) -> Result<Amount> {
+async fn transaction_notification(block_height: u64) -> Option<Amount> {
 	STATE.write().unwrap().process_icp_tx(block_height).await
 }
 
-#[ic_cdk_macros::update]
+#[query]
+#[candid::candid_method(query)]
+
+/// Returns the funding specific for a channel's participant.
+/// this function should be used to check whether all participants have
+/// deposited their owed funds into a channel to ensure it is fully funded.
+fn query_funding_only(funding: Funding) -> Option<Funding> {
+	Some(funding.clone())
+}
+
+#[query]
+#[candid::candid_method(query)]
+/// Returns only the memo specific for a channel.
+/// this function should be used to check whether all participants have
+/// deposited their owed funds into a channel to ensure it is fully funded.
+fn query_memo(mem: i32) -> Option<i32> {
+	Some(mem)
+}
+
+#[query]
+#[candid_method(query)]
+/// Returns the funds deposited for a channel's specified participant, if any.
+/// this function should be used to check whether all participants have
+/// deposited their owed funds into a channel to ensure it is fully funded.
+fn query_holdings(funding: Funding) -> Option<Amount> {
+	STATE.read().unwrap().query_holdings(funding)
+}
+
+#[update]
+#[candid_method]
+
 async fn deposit(funding: Funding) -> Option<Error> {
 	STATE
 		.write()
@@ -74,69 +114,159 @@ async fn deposit(funding: Funding) -> Option<Error> {
 		.err()
 }
 
-#[ic_cdk_macros::update]
+#[update]
+#[candid_method(update)]
+
 /// Only used for tests.
 fn deposit_mocked(funding: Funding, amount: Amount) -> Option<Error> {
 	STATE.write().unwrap().deposit(funding, amount).err()
 }
 
-#[ic_cdk_macros::update]
+#[update]
+#[candid_method(update)]
 /// Starts a dispute settlement for a non-finalized channel. Other participants
 /// will have to reply with a call to 'dispute' within the channel's challenge
 /// duration to register a more recent channel state if exists. After the
 /// challenge duration elapsed, the channel will be marked as settled.
-fn dispute(params: Params, state: FullySignedState) -> Option<Error> {
-	STATE
+async fn dispute(creq: ConcludeRequest) -> String {
+	let params = Params {
+		nonce: creq.nonce.clone(),
+		participants: creq.participants.clone(),
+		challenge_duration: creq.challenge_duration.clone(),
+	};
+
+	let bare_state = State {
+		channel: creq.channel.clone(),
+		version: creq.version.clone(),
+		allocation: creq.allocation.clone(),
+		finalized: creq.finalized.clone(),
+	};
+
+	let state = FullySignedState {
+		state: bare_state.clone(),
+		sigs: creq.sigs.clone(),
+	};
+
+	match STATE
 		.write()
 		.unwrap()
 		.dispute(params, state, blocktime())
-		.err()
+		.await
+	{
+		Ok(_) => "successful initialization of a dispute".to_string(),
+		Err(_) => "error disputing".to_string(),
+	}
 }
 
-#[ic_cdk_macros::update]
-/// Settles a finalized channel and makes its final funds distribution
-/// withdrawable.
-fn conclude(params: Params, state: FullySignedState) -> Option<Error> {
-	STATE
+#[update]
+#[candid::candid_method]
+fn verify_sig(creq: ConcludeRequest) -> String {
+	let sigs = creq.sigs.clone();
+	let addrs = creq.participants.clone();
+
+	let bare_state = State {
+		channel: creq.channel.clone(),
+		version: creq.version.clone(),
+		allocation: creq.allocation.clone(),
+		finalized: creq.finalized.clone(),
+	};
+
+	for (i, pk) in addrs.iter().enumerate() {
+		if let Err(_) = bare_state.validate_sig(&sigs[i], pk) {
+			return "Signature verification failed".to_string();
+		}
+	}
+
+	"Signatures verified successfully".to_string()
+}
+
+#[update]
+#[candid::candid_method]
+async fn conclude(conreq: ConcludeRequest) -> String {
+	let params = Params {
+		nonce: conreq.nonce.clone(),
+		participants: conreq.participants.clone(),
+		challenge_duration: conreq.challenge_duration.clone(),
+	};
+
+	let bare_state = State {
+		channel: conreq.channel.clone(),
+		version: conreq.version.clone(),
+		allocation: conreq.allocation.clone(),
+		finalized: conreq.finalized.clone(),
+	};
+
+	let state = FullySignedState {
+		state: bare_state,
+		sigs: conreq.sigs.clone(),
+	};
+
+	match STATE
 		.write()
 		.unwrap()
 		.conclude(params, state, blocktime())
+		.await
+	{
+		Ok(_) => "successful concluding the channel".to_string(),
+		Err(_) => "error concluding the channel".to_string(),
+	}
+}
+
+#[update]
+#[candid::candid_method]
+fn conclude_can(params: Params, state: FullySignedState) -> Option<Error> {
+	STATE
+		.write()
+		.unwrap()
+		.conclude_can(params, state, blocktime())
 		.err()
 }
 
-#[ic_cdk_macros::update]
-/// Withdraws the specified participant's funds from a settled channel.
-async fn withdraw(
-	request: WithdrawalRequest,
-	auth: L2Signature,
-) -> (Option<icp::BlockHeight>, Option<Error>) {
-	let result = withdraw_impl(request, auth).await;
-	(result.as_ref().ok().cloned(), result.err())
+#[update]
+#[candid::candid_method]
+// Withdraws the specified participant's funds from a settled channel.
+async fn withdraw(req: WithdrawalRequest) -> String {
+	let result = withdraw_impl(req).await;
+
+	match result {
+		Ok(_block_height) => "successful withdrawal".to_string(),
+		Err(_) => "error withdrawing".to_string(),
+	}
 }
 
-#[ic_cdk_macros::update]
-/// Withdraws the specified participant's funds from a settled channel.
+#[update]
+/// Withdraws the specified participant's funds from a settled channel (mocked)
 async fn withdraw_mocked(
-	request: WithdrawalRequest,
-	auth: L2Signature,
+	request: WithdrawalTestRq,
+	sig: L2Signature,
 ) -> (Option<Amount>, Option<Error>) {
-	let result = STATE.write().unwrap().withdraw(request, auth, blocktime());
-	(result.as_ref().ok().cloned(), result.err())
-}
-
-async fn withdraw_impl(request: WithdrawalRequest, auth: L2Signature) -> Result<icp::BlockHeight> {
-	let receiver = request.receiver.clone();
-	let funding = request.funding.clone();
-	let amount = STATE
+	let result = STATE
 		.write()
 		.unwrap()
-		.withdraw(request, auth, blocktime())?;
+		.withdraw_can(request, sig, blocktime());
+	(result.as_ref().ok().cloned(), result.err())
+}
+
+async fn withdraw_impl(request: WithdrawalRequest) -> Result<icp::BlockHeight> {
+	let receiver = request.receiver.clone();
+	let funding = Funding {
+		channel: request.channel.clone(),
+		participant: request.participant.clone(),
+	};
+
+	let amount = STATE.write().unwrap().withdraw(request)?;
+
 	let mut amount_str = amount.to_string();
+
 	amount_str.retain(|c| c != '_');
 	let amount_u64 = amount_str.parse::<u64>().unwrap();
 
+	let prince = Principal::from_text(icp::MAINNET_ICP_LEDGER).unwrap();
+
+	println!("Principal: {:?}", prince);
+
 	match ic_ledger_types::transfer(
-		Principal::from_text(icp::MAINNET_ICP_LEDGER).unwrap(),
+		prince,
 		TransferArgs {
 			memo: Memo(0),
 			amount: Tokens::from_e8s(amount_u64),
@@ -163,14 +293,7 @@ async fn withdraw_impl(request: WithdrawalRequest, auth: L2Signature) -> Result<
 }
 
 #[ic_cdk_macros::query]
-/// Returns the funds deposited for a channel's specified participant, if any.
-/// this function should be used to check whether all participants have
-/// deposited their owed funds into a channel to ensure it is fully funded.
-fn query_holdings(funding: Funding) -> Option<Amount> {
-	STATE.read().unwrap().query_holdings(funding)
-}
-
-#[ic_cdk_macros::query]
+#[candid::candid_method(query)]
 /// Returns the latest registered state for a given channel and its dispute
 /// timeout. This function should be used to check for registered disputes.
 fn query_state(id: ChannelId) -> Option<RegisteredState> {
@@ -207,6 +330,7 @@ where
 				Event::Funded {
 					who: funding.participant.clone(),
 					total: self.holdings.get(&funding).cloned().unwrap(),
+					timestamp: time,
 				},
 			)
 			.await;
@@ -215,10 +339,10 @@ where
 
 	/// Call this to process an ICP transaction and register the funds for
 	/// further use.
-	pub async fn process_icp_tx(&mut self, tx: icp::BlockHeight) -> Result<Amount> {
+	pub async fn process_icp_tx(&mut self, tx: icp::BlockHeight) -> Option<Amount> {
 		match self.icp_receiver.verify(tx).await {
-			Ok(v) => Ok(v),
-			Err(e) => Err(Error::ReceiverError(e)),
+			Ok(v) => Some(v),
+			Err(_e) => None, //Err(Error::ReceiverError(e)),
 		}
 	}
 
@@ -274,7 +398,7 @@ where
 		acc
 	}
 
-	pub fn conclude(
+	pub fn conclude_can(
 		&mut self,
 		params: Params,
 		state: FullySignedState,
@@ -287,7 +411,43 @@ where
 		self.register_channel(&params, RegisteredState::conclude(state, &params)?)
 	}
 
-	pub fn dispute(
+	pub async fn conclude(
+		&mut self,
+		params: Params,
+		fsstate: FullySignedState,
+		now: Timestamp,
+	) -> Result<()> {
+		if let Some(old_state) = self.state(&fsstate.state.channel) {
+			require!(!old_state.settled(now), AlreadyConcluded);
+		}
+
+		self.register_channel(
+			&params,
+			RegisteredState::conclude(fsstate.clone(), &params)?,
+		)?;
+
+		let state = fsstate.state.clone();
+		let regstate = RegisteredState {
+			state: state.clone(),
+			timeout: now,
+		};
+
+		events::STATE
+			.write()
+			.unwrap()
+			.register_event(
+				now,
+				state.channel.clone(),
+				Event::Concluded {
+					state: regstate,
+					timestamp: now,
+				},
+			)
+			.await;
+		Ok(())
+	}
+
+	pub fn dispute_can(
 		&mut self,
 		params: Params,
 		state: FullySignedState,
@@ -298,12 +458,79 @@ where
 			require!(old_state.state.version < state.state.version, OutdatedState);
 		}
 
-		self.register_channel(&params, RegisteredState::dispute(state, &params, now)?)
+		self.register_channel(
+			&params,
+			RegisteredState::dispute_testing(state, &params, now)?,
+		)
 	}
 
-	pub fn withdraw(
+	pub async fn dispute(
 		&mut self,
-		req: WithdrawalRequest,
+		params: Params,
+		fsstate: FullySignedState,
+		now: Timestamp,
+	) -> Result<()> {
+		if let Some(old_state) = self.state(&fsstate.state.channel) {
+			require!(!old_state.settled(now), AlreadyConcluded);
+			require!(
+				old_state.state.version < fsstate.state.version,
+				OutdatedState
+			);
+		}
+
+		self.register_channel(
+			&params,
+			RegisteredState::dispute(fsstate.clone(), &params, now)?,
+		)?;
+
+		let bare_state = State {
+			channel: fsstate.state.channel.clone(),
+			version: fsstate.state.version.clone(),
+			allocation: fsstate.state.allocation.clone(),
+			finalized: fsstate.state.finalized.clone(),
+		};
+
+		let regstate = RegisteredState {
+			state: bare_state.clone(),
+			timeout: now + to_nanoseconds(params.challenge_duration), //params.challenge_duration * 1_000_000_000,
+		};
+
+		match events::STATE.write() {
+			Ok(mut state) => {
+				state
+					.register_event(
+						now,
+						bare_state.channel.clone(),
+						Event::Disputed {
+							state: regstate,
+							timestamp: now,
+						},
+					)
+					.await
+			}
+			Err(_) => return Err(Error::InvalidInput),
+		}
+
+		Ok(())
+	}
+
+	pub fn withdraw(&mut self, req: WithdrawalRequest) -> Result<Amount> {
+		let auth = req.signature.clone();
+		let now = req.time.clone();
+		req.validate_sig(&auth)?;
+		let funding = Funding::new(req.channel.clone(), req.participant.clone());
+		match self.state(&req.channel) {
+			None => Err(Error::NotFinalized),
+			Some(state) => {
+				require!(state.settled(now), NotFinalized);
+				Ok(self.holdings.remove(&funding).unwrap_or_default())
+			}
+		}
+	}
+
+	pub fn withdraw_can(
+		&mut self,
+		req: WithdrawalTestRq,
 		auth: L2Signature,
 		now: Timestamp,
 	) -> Result<Amount> {
@@ -316,4 +543,10 @@ where
 			}
 		}
 	}
+}
+
+pub fn hash_to_channel_id(hash: &Hash) -> ChannelId {
+	let mut arr = [0u8; 32];
+	arr.copy_from_slice(&hash.0[..32]);
+	ChannelId(arr)
 }
