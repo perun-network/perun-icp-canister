@@ -16,6 +16,7 @@ use candid::Encode;
 use ed25519_dalek::{ExpandedSecretKey, SecretKey};
 use ic_cdk::export::Principal;
 use oorandom::Rand64 as Prng;
+
 use std::time::SystemTime;
 
 use crate::{types::*, CanisterState};
@@ -91,7 +92,7 @@ impl Setup {
 
 		let hash = rand_hash(&mut rand);
 		let mut nonce_bytes = [0u8; 32];
-		nonce_bytes.copy_from_slice(hash.0.as_slice());
+		nonce_bytes.copy_from_slice(&hash.0[32..]);
 
 		let params = Params {
 			nonce: Nonce(nonce_bytes),
@@ -103,8 +104,8 @@ impl Setup {
 			channel: params.id(),
 			version: rand.rand_u64(),
 			allocation: vec![
-				(rand.rand_u64() >> 20).into(),
-				(rand.rand_u64() >> 20).into(),
+				(rand.rand_u64() % 10001).into(),
+				(rand.rand_u64() % 10001).into(),
 			],
 			finalized,
 		};
@@ -132,8 +133,22 @@ impl Setup {
 
 	/// Signs the setup's channel state for all channel participants.
 	pub fn sign_state(&self) -> FullySignedState {
-		self.sign_encoding(&Encode!(&self.state).unwrap())
+		let mut state_enc = Vec::new();
+		state_enc.extend_from_slice(&self.state.channel.0);
+		let version_bytes = self.state.version.to_le_bytes();
+		state_enc.extend_from_slice(&version_bytes);
+
+		for amount in &self.state.allocation {
+			let amount_bytes = (amount.0).to_bytes_le(); // convert amount to bytes
+			state_enc.extend_from_slice(&amount_bytes); // add amount bytes
+		}
+
+		let finalized_bytes = [self.state.finalized as u8]; // convert boolean to byte
+		state_enc.extend_from_slice(&finalized_bytes); // add finalized byte
+
+		self.sign_encoding(&state_enc)
 	}
+
 	/// Creates a fully signed state with invalid signatures.
 	pub fn sign_state_invalid(&self) -> FullySignedState {
 		self.sign_encoding(&Encode!(&"invalid state").unwrap())

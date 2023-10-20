@@ -1,0 +1,19 @@
+type ChannelTime = record { time : nat64; chanid : vec nat8 };
+type Event = variant {
+  Disputed : record { state : RegisteredState; timestamp : nat64 };
+  Funded : record { who : vec nat8; total : nat; timestamp : nat64 };
+  Concluded : record { state : RegisteredState; timestamp : nat64 };
+};
+type RegEvent = record { time : nat64; event : Event; chanid : vec nat8 };
+type RegisteredState = record { state : State; timeout : nat64 };
+type State = record {
+  version : nat64;
+  finalized : bool;
+  allocation : vec nat;
+  channel : vec nat8;
+};
+service : {
+  query_events : (ChannelTime) -> (text) query;
+  register_event : (vec nat8, nat64, Event) -> ();
+  register_event_isolated : (RegEvent) -> ();
+}

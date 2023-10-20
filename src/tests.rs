@@ -25,7 +25,7 @@ fn save_candid() {
 	let dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
 	create_dir_all(&dir).expect("Failed to create directory.");
 
-	write(dir.join("aaaa.did"), export_candid()).expect("Write failed.");
+	write(dir.join("icp_perun_gen.did"), export_candid()).expect("Write failed.");
 }
 
 #[test]
@@ -61,7 +61,9 @@ fn test_deposit() {
 fn test_conclude() {
 	let mut s = test::Setup::new(true, true);
 	let sstate = s.sign_state();
-	assert_ok!(s.canister.conclude_can(s.params, sstate, 0));
+	let result = s.canister.conclude_can(s.params, sstate, 0);
+
+	assert!(result.is_ok(), "The test failed with error: {:?}", &result);
 }
 
 #[test]

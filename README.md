@@ -5,20 +5,15 @@
 [![CI Status](https://github.com/perun-network/perun-icp-canister/actions/workflows/rust.yml/badge.svg)](https://github.com/perun-network/perun-icp-canister/actions/workflows/rust.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202-blue)](https://www.apache.org/licenses/LICENSE-2.0.txt)
 
-# Perun ICP Canister
+# Perun IC Canister
 
 This repository contains the Internet Computer canister for the [Perun state channel framework](https://perun.network) developed by [PolyCrypt](https://polycry.pt).
 The canister is developed as part of the Dfinity grants program.
 It contains the on-chain logic needed to operate payment channels on the internet computer.
 In the future, it will connect to the [go-perun](https://github.com/hyperledger-labs/go-perun) client library so that applications can be written for it.
 
-## :warning: Current Limitations
-
-Currently, the canister only supports ICP tokens.
-Once a token standard or ICP token interactions are live, the code can be easily
-adapted to work with those.
-
-Additionally, the client-side logic for our channel framework is not fully covered by this grant's scope.
+# Perun Payment Channel Backend
+You can find the off-chain backend for the Perun payment channels [here](https://github.com/perun-network/perun-icp-backend). To build payment channel applications, you deploy the canister on the Internet Computer and connect the backend to the chain.
 
 ## Protocol
 
@@ -58,8 +53,7 @@ into the *Perun* canister. You will need Rust `1.56` or later.
 
 1. Start a replica locally and deploy the *Perun* canister to it:
 ```bash
-dfx start --clean
-dfx deploy # In a new terminal
+./startdeploy.sh
 ```
 
 2. Copy the *principal ID* from the terminal which looks like this: `bkyz2-fmaaa-aaaaa-qaaaq-cai`.
@@ -75,7 +69,7 @@ RUST_LOG=info cargo run --example happy_walkthrough "bkyz2-fmaaa-aaaaa-qaaaq-cai
 ```
 The output should look like this minus the comments:
 ```sh
-INFO  happy_walkthrough > URL: http://localhost:8000/
+INFO  happy_walkthrough > URL: http://localhost:4943/
 INFO  happy_walkthrough > Canister ID: bkyz2-fmaaa-aaaaa-qaaaq-cai
 # Bob and Alice start with 0 ICP in the channel.
 INFO  happy_walkthrough > Querying deposit channel: 0x920c7366… for peer IDx: 0, now: 0 ICP
@@ -103,7 +97,7 @@ INFO  happy_walkthrough > Querying deposit channel: 0x920c7366… for peer IDx: 
 
 ## Copyright
 
-Copyright 2021 - 2022 - See [NOTICE file](NOTICE) for copyright holders.
+Copyright 2021 - 2023 - See [NOTICE file](NOTICE) for copyright holders.
 Use of the source code is governed by the Apache 2.0 license that can be found in the [LICENSE file](LICENSE).
 
 Contact us at [info@perun.network](mailto:info@perun.network).

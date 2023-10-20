@@ -403,6 +403,13 @@ impl State {
 			.ok_or(Error::Authentication)
 	}
 
+	pub fn validate_sig_encoded(&self, sig: &L2Signature, pk: &L2Account) -> CanisterResult<()> {
+		let enc = Encode!(self).expect("encoding state");
+		pk.0.verify_strict(&enc, &sig.0)
+			.ok()
+			.ok_or(Error::Authentication)
+	}
+
 	/// Calculates the total funds in a channel's state.
 	pub fn total(&self) -> Amount {
 		self.allocation
@@ -456,9 +463,25 @@ impl FullySignedState {
 		Ok(())
 	}
 
+	pub fn validate_encoded(&self, params: &Params) -> CanisterResult<()> {
+		require!(self.state.channel == params.id(), InvalidInput);
+		require!(self.sigs.len() == params.participants.len(), InvalidInput);
+		require!(self.sigs.len() == self.state.allocation.len(), InvalidInput);
+
+		for (i, pk) in params.participants.iter().enumerate() {
+			self.state.validate_sig_encoded(&self.sigs[i], pk)?;
+		}
+
+		Ok(())
+	}
+
 	pub fn validate_final(&self, params: &Params) -> CanisterResult<()> {
 		require!(self.state.finalized, NotFinalized);
 		self.validate(params)
+	}
+	pub fn validate_final_encoded(&self, params: &Params) -> CanisterResult<()> {
+		require!(self.state.finalized, NotFinalized);
+		self.validate_encoded(params)
 	}
 }
 
@@ -467,6 +490,14 @@ impl FullySignedState {
 impl RegisteredState {
 	pub fn conclude(state: FullySignedState, params: &Params) -> CanisterResult<Self> {
 		state.validate_final(params)?;
+		Ok(Self {
+			state: state.state,
+			timeout: Default::default(),
+		})
+	}
+
+	pub fn conclude_encoded(state: FullySignedState, params: &Params) -> CanisterResult<Self> {
+		state.validate_final_encoded(params)?;
 		Ok(Self {
 			state: state.state,
 			timeout: Default::default(),
@@ -482,6 +513,18 @@ impl RegisteredState {
 		Ok(Self {
 			state: state.state,
 			timeout: now + to_nanoseconds(params.challenge_duration), // * 1_000_000_000,
+		})
+	}
+
+	pub fn dispute_testing(
+		state: FullySignedState,
+		params: &Params,
+		now: Timestamp,
+	) -> CanisterResult<Self> {
+		state.validate(params)?;
+		Ok(Self {
+			state: state.state,
+			timeout: now + params.challenge_duration,
 		})
 	}
 

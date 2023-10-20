@@ -76,7 +76,7 @@ async fn walkthrough(cid: Principal, lid: Principal, url: String) -> Result<(), 
 	// Query on-chain balances.
 	demo.query_holdings(alice).await?;
 	demo.query_holdings(bob).await?;
-	print!("Demo finished successfully.");
+	info!("Demo finished successfully.");
 	Ok(())
 }
 
@@ -91,13 +91,9 @@ impl Demo {
 			.with_transport(ReqwestHttpReplicaV2Transport::create(url)?)
 			.with_identity(create_identity())
 			.build()?;
-		agent.fetch_root_key().await?; // Check for dev node.
-		let pri = agent.get_principal()?; // Check for replica.
+		agent.fetch_root_key().await?;
+		let pri = agent.get_principal()?;
 		println!("Generated Principal: {}", pri);
-		// let delay = Delay::builder()
-		// 	.throttle(Duration::from_millis(500))
-		// 	.timeout(Duration::from_secs(60 * 5))
-		// 	.build();
 
 		Ok(Self {
 			setup: test::Setup::new(finalized, false),
@@ -138,24 +134,11 @@ impl Demo {
 			.call_and_wait()
 			.await?;
 		let transfer_result = Some(Decode!(&bytes, TransferResult).unwrap());
+
 		println!("transfer_result: {:?}", transfer_result);
 		let block = transfer_result.unwrap().expect("transfer should not fail");
 		info!("notifying canister of receipt {}", block);
-		info!(
-			"received: {}",
-			Decode!(
-				&self
-					.agent
-					.update(&self.canister, "transaction_notification")
-					.with_arg(Encode!(&block).unwrap())
-					.call_and_wait()
-					.await?,
-				icp_perun::error::Result<Amount>
-			)
-			.unwrap()
-			.map_or_else(|e| e.to_string(), |n| n.to_string())
-		);
-		info!("notifying canister of receipt (again ;) )");
+
 		self.agent
 			.update(&self.canister, "transaction_notification")
 			.with_arg(Encode!(&block).unwrap())
@@ -202,7 +185,7 @@ impl Demo {
 		info!("Concluding       channel: {}", self.setup.params.id());
 		let sig_state = self.setup.sign_state();
 		self.agent
-			.update(&self.canister, "conclude")
+			.update(&self.canister, "conclude_can") //
 			.with_arg(encode_args((&self.setup.params, &sig_state)).unwrap())
 			.call_and_wait()
 			.await?;
@@ -249,8 +232,6 @@ fn parse_args() -> (Principal, Principal, String) {
 
 /// Loads a minter identity from a pem file.
 fn create_identity() -> impl Identity {
-	Secp256k1Identity::from_pem_file(
-		std::env::var("HOME").unwrap() + "/.config/dfx/identity/minter/identity.pem",
-	)
-	.expect("loading default identity")
+	Secp256k1Identity::from_pem_file("./userdata/minter_identity.pem")
+		.expect("loading default identity")
 }

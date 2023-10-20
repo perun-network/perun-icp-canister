@@ -1,0 +1,105 @@
+//  Copyright 2021 PolyCrypt GmbH
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
+type Error = text;
+
+type EventTxt = text;
+
+type Timestamp = nat64;
+type Duration = nat64;
+type Hash = vec nat8;
+type Nonce = vec nat8;
+type ChannelId = vec nat8;
+type Amount = nat;
+type Memo = nat64;
+type Signature = Hash;
+type L2Account = Hash;
+
+type Funding = record { channel : ChannelId; participant : L2Account };
+
+type ChannelTime = record {
+	chanid : ChannelId;
+	time : Timestamp;
+};
+type Event = variant {
+	Disputed : RegisteredState;
+	Funded : record { who : L2Account; total : Amount };
+	Concluded;
+};
+
+type RegEvent = record {
+	chanid : ChannelId;
+	time : nat64;
+	event : Event;
+};
+
+type Params = record {
+	nonce : Nonce;
+	participants : vec L2Account;
+	challenge_duration : Duration;
+};
+
+type State = record {
+	channel : ChannelId;
+	version : nat64;
+	allocation : vec Amount;
+	finalized : bool;
+};
+
+type FullySignedState = record {
+	state : State;
+	sigs : vec blob;
+};
+
+type AdjRequest = record {
+	nonce : Nonce;
+	participants : vec L2Account;
+	challenge_duration : Duration;
+	channel : ChannelId;
+	version : nat64;
+	allocation : vec Amount;
+	finalized : bool;
+	sigs : vec Signature;
+};
+
+type WithdrawalRequest = record {
+	channel : ChannelId;
+	participant : L2Account;
+	receiver : principal;
+	signature : Signature;
+	time : Timestamp;
+};
+
+type RegisteredState = record {
+	state : State;
+	timeout : Timestamp;
+};
+
+service : {
+	"deposit" : (Funding) -> (opt Error);
+	"query_holdings" : (Funding) -> (opt Amount) query;
+	"conclude" : (AdjRequest) -> (opt Error);
+	"conclude_can" : (Params, FullySignedState) -> (opt Error);
+	"dispute" : (AdjRequest) -> (opt Error);
+	"query_state" : (ChannelId) -> (opt RegisteredState);
+	"withdraw" : (WithdrawalRequest) -> (opt Error);
+	"query_fid" : (Funding) -> (opt Memo) query;
+	"query_memo" : (Memo) -> (opt Memo) query;
+	"transaction_notification" : (nat64) -> (opt Amount);
+	"query_funding_only" : (Funding) -> (opt Funding) query;
+	"__get_candid_interface_tmp_hack" : () -> (text) query;
+	"query_events" : (ChannelTime) -> (opt EventTxt) query;
+	"register_event" : (vec nat8, nat64, Event) -> ();
+	"register_event_isolated" : (RegEvent) -> ();
+};

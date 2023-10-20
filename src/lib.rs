@@ -214,6 +214,16 @@ async fn conclude(conreq: ConcludeRequest) -> String {
 
 #[update]
 #[candid::candid_method]
+fn conclude_can(params: Params, state: FullySignedState) -> Option<Error> {
+	STATE
+		.write()
+		.unwrap()
+		.conclude_can(params, state, blocktime())
+		.err()
+}
+
+#[update]
+#[candid::candid_method]
 // Withdraws the specified participant's funds from a settled channel.
 async fn withdraw(req: WithdrawalRequest) -> String {
 	let result = withdraw_impl(req).await;
@@ -226,10 +236,17 @@ async fn withdraw(req: WithdrawalRequest) -> String {
 
 #[update]
 /// Withdraws the specified participant's funds from a settled channel (mocked)
-async fn withdraw_mocked(request: WithdrawalRequest) -> (Option<Amount>, Option<Error>) {
-	let result = STATE.write().unwrap().withdraw(request); // auth
+async fn withdraw_mocked(
+	request: WithdrawalTestRq,
+	sig: L2Signature,
+) -> (Option<Amount>, Option<Error>) {
+	let result = STATE
+		.write()
+		.unwrap()
+		.withdraw_can(request, sig, blocktime());
 	(result.as_ref().ok().cloned(), result.err())
 }
+
 async fn withdraw_impl(request: WithdrawalRequest) -> Result<icp::BlockHeight> {
 	let receiver = request.receiver.clone();
 	let funding = Funding {
@@ -344,7 +361,13 @@ where
 	/// allowed to be under-funded and are otherwise expected to match the
 	/// deposit distribution exactly if fully funded.
 	fn register_channel(&mut self, params: &Params, state: RegisteredState) -> Result<()> {
-		self.update_holdings(&params, &state.state);
+		let total = &self.holdings_total(&params);
+		if total < &state.state.total() {
+			require!(state.state.may_be_underfunded(), InsufficientFunding);
+		} else {
+			self.update_holdings(&params, &state.state);
+		}
+
 		self.channels.insert(state.state.channel.clone(), state);
 		Ok(())
 	}
@@ -435,7 +458,10 @@ where
 			require!(old_state.state.version < state.state.version, OutdatedState);
 		}
 
-		self.register_channel(&params, RegisteredState::dispute(state, &params, now)?)
+		self.register_channel(
+			&params,
+			RegisteredState::dispute_testing(state, &params, now)?,
+		)
 	}
 
 	pub async fn dispute(
